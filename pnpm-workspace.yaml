@@ -1,0 +1,5 @@
+# pnpm 11 refuses to install until every dependency build script has an explicit decision.
+# @parcel/watcher arrives via sass-embedded and only powers sass's own watch mode, which
+# Vite never invokes, so its native build is skipped rather than compiled.
+allowBuilds:
+  '@parcel/watcher': false
