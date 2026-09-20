@@ -1,0 +1,175 @@
+:root {
+  --bg: #f1f0ec;
+  --card: #ffffff;
+  --border: #e8e6df;
+  --border-strong: #d7d4cb;
+  --text: #242825;
+  --text2: #555c57;
+  --text3: #686e68;
+  --accent: oklch(52% 0.075 240);
+  --accent-hover: oklch(44% 0.08 240);
+  --track-off: #e0ded7;
+  --knob: #ffffff;
+  --field-bg: #f4f3ef;
+  --field-border: #e4e2db;
+  // The "on" switch reads green rather than accent-blue, so state is legible at a glance.
+  --switch-on: oklch(60% 0.072 168);
+  --switch-on-ring: oklch(50% 0.072 168 / 0.5);
+  --switch-glow: oklch(58% 0.072 168 / 0.45);
+  --win-border: rgba(24, 28, 26, 0.14);
+  --shadow: 0 1px 3px rgba(24, 28, 26, 0.1), 0 14px 34px -10px rgba(24, 28, 26, 0.14);
+  --card-shadow:
+    0 1px 1px rgba(24, 28, 26, 0.04), 0 3px 8px -3px rgba(24, 28, 26, 0.07),
+    0 16px 34px -22px rgba(24, 28, 26, 0.32);
+  // Category tints mixed into badges; the percentages differ per theme (see .badge).
+  --cat-mix-strong: 22%;
+  --cat-mix-soft: 11%;
+  --cat-mix-ring: 24%;
+
+  --cat-eye: oklch(40% 0.14 25);
+  --cat-posture: oklch(58% 0.1 45);
+  --cat-movement: oklch(52% 0.085 160);
+  --cat-hydration: oklch(53% 0.09 235);
+
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101312;
+    --card: #1c201e;
+    --border: #2c312e;
+    --border-strong: #3c423d;
+    --text: #f0f2ee;
+    --text2: #c2c9c3;
+    --text3: #8a918b;
+    --accent: oklch(75% 0.08 240);
+    --accent-hover: oklch(83% 0.07 240);
+    --track-off: #333935;
+    --knob: #fbfcfa;
+    --field-bg: #232825;
+    --field-border: #333935;
+    --switch-on: oklch(64% 0.082 168);
+    --switch-on-ring: oklch(76% 0.07 168 / 0.45);
+    --switch-glow: oklch(64% 0.082 168 / 0.4);
+    --win-border: rgba(255, 255, 255, 0.09);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 16px 36px -12px rgba(0, 0, 0, 0.55);
+    --cat-mix-strong: 28%;
+    --cat-mix-soft: 15%;
+    --cat-mix-ring: 32%;
+
+    --cat-eye: oklch(60% 0.16 25);
+    --cat-posture: oklch(74% 0.09 55);
+    --cat-movement: oklch(72% 0.085 160);
+    --cat-hydration: oklch(72% 0.09 235);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+html.is-reminder,
+html.is-reminder body {
+  background: transparent;
+  overflow: hidden;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+a {
+  color: var(--accent-hover);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+// Settings rows are shared by CategoryRow and the General section.
+.settings-section__label {
+  padding: 0 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: var(--text2);
+}
+
+.settings-card {
+  border-radius: 18px;
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+}
+
+.settings-row {
+  padding: 15px 17px 16px;
+
+  // An inset shadow rather than a border, so the row keeps its full padding.
+  &:not(:last-child) {
+    box-shadow: inset 0 -1px 0 var(--border);
+  }
+}
+
+.settings-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-row__title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.008em;
+  color: var(--text);
+}
+
+.settings-row__description {
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text2);
+}
+
+.settings-row__detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  transition: opacity 150ms ease;
+}
+
+.is-dimmed {
+  opacity: 0.45;
+}
