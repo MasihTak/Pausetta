@@ -22,11 +22,10 @@ pub fn update_settings(
     service: State<'_, AppSettingsService>,
     settings: Settings,
 ) -> Result<Settings, String> {
-    let updated = service.update(settings)?;
-    // The scheduler picks up new intervals on its own next tick; only the login item
-    // lives outside the database and has to be pushed to the OS here.
-    autostart::apply(&app, updated.launch_on_login)?;
-    Ok(updated)
+    // OS first: if it refuses the login item, nothing is saved.
+    settings.validate()?;
+    autostart::apply(&app, settings.launch_on_login)?;
+    service.update(settings)
 }
 
 #[tauri::command]
