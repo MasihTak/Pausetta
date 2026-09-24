@@ -38,13 +38,15 @@ fn tick(app: &AppHandle) {
         return;
     };
 
-    if settings.sound_enabled {
-        sound::play_notification();
-    }
     if let Err(error) = reminder_window::show(app, category) {
         eprintln!(
             "[pausetta] could not show the {} reminder: {error}",
             category.as_str()
         );
+        return;
+    }
+    // Only after the window opened, so a failure never leaves a chime with nothing to see.
+    if settings.sound_enabled {
+        sound::play_notification();
     }
 }
