@@ -7,6 +7,7 @@ import SettingsView from "../src/views/SettingsView.vue";
 import PauseMenu from "../src/components/PauseMenu.vue";
 import { invoke, listen, openUrl } from "./setup.js";
 import { makeSettings, useFreshApp } from "./helpers.js";
+import { useSettingsStore } from "../src/stores/settings.js";
 
 useFreshApp();
 
@@ -111,6 +112,40 @@ describe("App screens", () => {
 
     expect(app.findComponent(AboutView).exists()).toBe(true);
     expect(app.find('[role="alert"]').exists()).toBe(false);
+  });
+
+  it("still loads settings when an event listener fails to register", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const stopShowScreen = vi.fn();
+    listen.mockImplementation((event) =>
+      event === "settings-changed"
+        ? Promise.reject(new Error("no listener"))
+        : Promise.resolve(stopShowScreen),
+    );
+
+    const app = mount(App);
+    await flushPromises();
+
+    expect(app.findComponent(SettingsView).exists()).toBe(true);
+    app.unmount();
+    expect(stopShowScreen).toHaveBeenCalledOnce();
+  });
+
+  it("shows why a change was rejected until it's dismissed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { app } = await mountApp();
+    const store = useSettingsStore();
+
+    invoke.mockRejectedValueOnce("could not register login item");
+    await store.update((settings) => (settings.launchOnLogin = true));
+    await flushPromises();
+
+    const alert = app.find(".save-error");
+    expect(alert.attributes("role")).toBe("alert");
+    expect(alert.text()).toContain("could not register login item");
+
+    await app.find(".save-error__dismiss").trigger("click");
+    expect(app.find(".save-error").exists()).toBe(false);
   });
 
   it("drops its event listeners when unmounted", async () => {
