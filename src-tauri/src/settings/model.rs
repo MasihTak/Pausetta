@@ -74,7 +74,7 @@ impl Categories {
 
 impl Default for Categories {
     // Defaults follow science-research.md: 20-20-20 for eyes, movement in the
-    // well-supported 30â€“60 min range, posture paired near it, hydration hourly.
+    // well-supported 30–60 min range, posture paired near it, hydration hourly.
     fn default() -> Self {
         let enabled_every = |interval_minutes| CategorySettings {
             enabled: true,
