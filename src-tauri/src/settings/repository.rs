@@ -192,9 +192,8 @@ fn read_pause(kind: Option<String>, until: Option<String>) -> Option<PauseState>
     Some(PauseState { kind, until })
 }
 
-/// Applies migrations after `MIGRATIONS[..user_version]`, then advances user_version.
-/// Runs in a transaction so a failure partway through never leaves the version ahead
-/// of what was actually applied.
+/// Applies migrations after `MIGRATIONS[..user_version]`. Each migration commits together
+/// with its version bump, so a crash can't leave one applied but unrecorded.
 fn run_migrations(connection: &Connection) -> Result<(), String> {
     let current_version: u32 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
@@ -203,7 +202,8 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
     let pending = MIGRATIONS.iter().skip(current_version as usize);
     for (offset, statement) in pending.enumerate() {
         let index = current_version as usize + offset;
-        match connection.execute(statement, []) {
+        let transaction = connection.unchecked_transaction().map_err(to_message)?;
+        match transaction.execute(statement, []) {
             Ok(_) => {}
             // Migration 0 (add onboarding_completed) already landed on databases created
             // before user_version tracking existed; treat that specific case as applied.
@@ -211,9 +211,10 @@ fn run_migrations(connection: &Connection) -> Result<(), String> {
                 if index == 0 && message.contains("duplicate column name") => {}
             Err(error) => return Err(to_message(error)),
         }
-        connection
+        transaction
             .execute(&format!("PRAGMA user_version = {}", index + 1), [])
             .map_err(to_message)?;
+        transaction.commit().map_err(to_message)?;
     }
     Ok(())
 }
