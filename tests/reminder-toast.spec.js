@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import ReminderToast from "../src/components/ReminderToast.vue";
 import { CATEGORY_BY_KEY } from "../src/constants/categories.js";
-import { invoke, listen } from "./setup.js";
+import { appWindow, cursorPosition, invoke, listen } from "./setup.js";
 import { useFreshApp } from "./helpers.js";
 
 useFreshApp();
@@ -150,6 +150,33 @@ describe("ReminderToast", () => {
     expect(invoke).not.toHaveBeenCalledWith("close_reminder");
     vi.advanceTimersByTime(1);
     expect(invoke).toHaveBeenCalledWith("close_reminder");
+    toast.unmount();
+  });
+
+  it("lets clicks through everywhere but the card", async () => {
+    // A 2x screen with the window at (1000, 500): the cursor starts in the empty margin.
+    appWindow.innerPosition.mockResolvedValue({ x: 1000, y: 500 });
+    appWindow.scaleFactor.mockResolvedValue(2);
+    cursorPosition.mockResolvedValue({ x: 1010, y: 510 });
+    vi.useFakeTimers();
+    const { toast } = await mountToast();
+    toast.find(".toast").element.getBoundingClientRect = () => ({
+      left: 28,
+      top: 100,
+      right: 380,
+      bottom: 280,
+    });
+    await flushPromises();
+    expect(appWindow.setIgnoreCursorEvents).toHaveBeenLastCalledWith(true);
+
+    // (1400, 900) physical is (200, 200) in the window: on the card.
+    cursorPosition.mockResolvedValue({ x: 1400, y: 900 });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(appWindow.setIgnoreCursorEvents).toHaveBeenLastCalledWith(false);
+
+    cursorPosition.mockResolvedValue({ x: 1010, y: 510 });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(appWindow.setIgnoreCursorEvents).toHaveBeenLastCalledWith(true);
     toast.unmount();
   });
 
