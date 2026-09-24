@@ -25,13 +25,22 @@ const isOnboarding = computed(
 );
 
 onMounted(async () => {
-  stopListening = await Promise.all([
+  // A failed listener must not stop settings from loading, or the window stays blank.
+  const registrations = await Promise.allSettled([
     listen("show-screen", (event) => (screen.value = event.payload)),
     // The tray can pause or resume reminders behind this window's back.
     listen("settings-changed", () =>
       store.load().catch((error) => console.error("[pausetta] could not reload settings", error)),
     ),
   ]);
+  stopListening = registrations
+    .filter((registration) => registration.status === "fulfilled")
+    .map((registration) => registration.value);
+  registrations
+    .filter((registration) => registration.status === "rejected")
+    .forEach((registration) =>
+      console.error("[pausetta] could not listen for window events", registration.reason),
+    );
 
   try {
     await store.load();
