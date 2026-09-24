@@ -39,7 +39,10 @@ pub fn run() {
 
             let handle = app.handle();
             let settings = app.state::<AppSettingsService>().get()?;
-            autostart::apply(handle, settings.launch_on_login)?;
+            // Non-fatal: a broken login item must not stop the reminders.
+            if let Err(error) = autostart::apply(handle, settings.launch_on_login) {
+                eprintln!("[pausetta] could not sync the login item: {error}");
+            }
             tray::create(handle)?;
             scheduler::spawn(handle);
 
