@@ -14,21 +14,46 @@ const showCount = ref(0);
 // Set by Rust in reminder_window.rs, from the same platform check that positions the window.
 const isTopAnchored = window.__PAUSETTA_REMINDER_ANCHOR__ === "top";
 
-// Matches the toast__progress-bar sweep, which is the user's visible countdown.
 const AUTO_DISMISS_MS = 14_000;
+// Outlasts the eye cue's 20s ring.
+const EYE_AUTO_DISMISS_MS = 22_000;
 
 const category = computed(() => CATEGORY_BY_KEY[categoryKey.value]);
 const intervalMinutes = computed(
   () => store.settings?.categories[categoryKey.value].intervalMinutes,
 );
+const autoDismissMs = computed(() =>
+  categoryKey.value === "eye" ? EYE_AUTO_DISMISS_MS : AUTO_DISMISS_MS,
+);
 
 let stopListening;
 let dismissTimer;
+let dismissDeadline;
+let remainingMs;
+let isHovered = false;
+
+function startDismissTimer(durationMs) {
+  clearTimeout(dismissTimer);
+  dismissDeadline = Date.now() + durationMs;
+  dismissTimer = setTimeout(dismiss, durationMs);
+}
 
 // An unattended reminder closes itself rather than waiting on the desk all afternoon.
 function restartDismissTimer() {
+  remainingMs = autoDismissMs.value;
+  if (!isHovered) startDismissTimer(remainingMs);
+}
+
+// The progress bar pauses on the same hover, in CSS.
+function pauseDismissTimer() {
+  isHovered = true;
   clearTimeout(dismissTimer);
-  dismissTimer = setTimeout(dismiss, AUTO_DISMISS_MS);
+  remainingMs = Math.max(0, dismissDeadline - Date.now());
+}
+
+function resumeDismissTimer() {
+  isHovered = false;
+  startDismissTimer(remainingMs);
 }
 
 onMounted(async () => {
@@ -62,6 +87,8 @@ function snooze() {
   <div
     class="toast-stage"
     :class="{ 'is-top': isTopAnchored }"
+    @mouseenter="pauseDismissTimer"
+    @mouseleave="resumeDismissTimer"
   >
     <article
       :key="`${categoryKey}-${showCount}`"
@@ -209,7 +236,10 @@ function snooze() {
       </div>
 
       <div class="toast__progress">
-        <div class="toast__progress-bar" />
+        <div
+          class="toast__progress-bar"
+          :style="{ animationDuration: `${autoDismissMs}ms` }"
+        />
       </div>
     </article>
   </div>
@@ -428,7 +458,7 @@ function snooze() {
   stroke: var(--cat-ink);
   stroke-linecap: round;
   stroke-dasharray: 82;
-  animation: cue-ring 20s linear infinite;
+  animation: cue-ring 20s linear forwards;
 }
 
 .cue-ring__label {
@@ -540,6 +570,10 @@ function snooze() {
   height: 100%;
   background: var(--cat);
   animation: progress-sweep 14s linear reverse forwards;
+
+  .toast-stage:hover & {
+    animation-play-state: paused;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

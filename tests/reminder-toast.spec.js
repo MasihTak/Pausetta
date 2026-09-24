@@ -111,12 +111,44 @@ describe("ReminderToast", () => {
   });
 
   it("closes itself if nobody acts on it", async () => {
+    window.__PAUSETTA_REMINDER_CATEGORY__ = "posture";
     vi.useFakeTimers();
     const { toast } = await mountToast();
 
+    vi.advanceTimersByTime(13_999);
     expect(invoke).not.toHaveBeenCalledWith("close_reminder");
-    vi.advanceTimersByTime(14_000);
 
+    vi.advanceTimersByTime(1);
+    expect(invoke).toHaveBeenCalledWith("close_reminder");
+    toast.unmount();
+  });
+
+  it("keeps an eye reminder up until its 20 second cue has run", async () => {
+    vi.useFakeTimers();
+    const { toast } = await mountToast();
+
+    vi.advanceTimersByTime(21_999);
+    expect(invoke).not.toHaveBeenCalledWith("close_reminder");
+
+    vi.advanceTimersByTime(1);
+    expect(invoke).toHaveBeenCalledWith("close_reminder");
+    toast.unmount();
+  });
+
+  it("holds the countdown while the pointer is on the toast", async () => {
+    window.__PAUSETTA_REMINDER_CATEGORY__ = "posture";
+    vi.useFakeTimers();
+    const { toast } = await mountToast();
+
+    vi.advanceTimersByTime(10_000);
+    await toast.find(".toast-stage").trigger("mouseenter");
+    vi.advanceTimersByTime(60_000);
+    expect(invoke).not.toHaveBeenCalledWith("close_reminder");
+
+    await toast.find(".toast-stage").trigger("mouseleave");
+    vi.advanceTimersByTime(3_999);
+    expect(invoke).not.toHaveBeenCalledWith("close_reminder");
+    vi.advanceTimersByTime(1);
     expect(invoke).toHaveBeenCalledWith("close_reminder");
     toast.unmount();
   });
