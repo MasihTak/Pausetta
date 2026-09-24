@@ -7,10 +7,9 @@ use chrono::{DateTime, Local, TimeDelta, Timelike, Utc};
 use super::idle::IdleDetector;
 use crate::settings::model::{CategoryKey, Settings};
 
-/// A gap between ticks larger than this means the machine slept (or the process stalled
-/// badly). Every rule is then pushed to its next cycle instead of firing, so waking a
-/// laptop never dumps a stack of overdue reminders on the user.
-const WAKE_GAP: TimeDelta = TimeDelta::seconds(5);
+/// Past this, a rule was missed (the machine slept) and skips to its next cycle instead of
+/// firing late. Generous because the OS can throttle a background app's timer (App Nap).
+const OVERDUE_GRACE: TimeDelta = TimeDelta::minutes(5);
 
 /// A second rule coming due in the same tick waits this long rather than being skipped to
 /// its next cycle. Two toasts a minute apart is fine; two at once is not — and skipping
@@ -73,14 +72,17 @@ impl<D: IdleDetector> SchedulerService<D> {
     ) -> Option<CategoryKey> {
         let mut state = self.lock();
 
-        let woke_from_sleep = state.last_tick_at.is_none_or(|last| now - last > WAKE_GAP);
+        // No ticks run during sleep, so the gap counts as idle time.
+        let time_since_last_tick = state
+            .last_tick_at
+            .and_then(|last| (now - last).to_std().ok())
+            .unwrap_or_default();
         state.last_tick_at = Some(now);
 
         // Each of these restarts the interval rather than firing late: an ignored or
         // suppressed reminder waits for its next cycle and never re-nags on return.
-        let is_suppressed = woke_from_sleep
-            || settings.pause.is_some()
-            || is_idle(settings, idle)
+        let is_suppressed = settings.pause.is_some()
+            || is_idle(settings, idle.max(time_since_last_tick))
             || is_within_quiet_hours(settings, now);
 
         let mut due = None;
@@ -98,7 +100,8 @@ impl<D: IdleDetector> SchedulerService<D> {
             });
 
             let has_new_interval = trigger.interval_minutes != category.interval_minutes;
-            if has_new_interval || is_suppressed {
+            let was_missed = now - trigger.at > OVERDUE_GRACE;
+            if has_new_interval || is_suppressed || was_missed {
                 trigger.interval_minutes = category.interval_minutes;
                 trigger.at = now + interval;
                 continue;
@@ -264,6 +267,40 @@ mod tests {
         assert_eq!(scheduler.tick_at(wake, &settings, Duration::ZERO), None);
 
         // The interval restarts from the wake instead of firing a backlog.
+        assert_eq!(
+            run_awake(&scheduler, &settings, wake, 21),
+            vec![(20, CategoryKey::Eye)]
+        );
+    }
+
+    #[test]
+    fn throttled_ticks_still_fire_reminders() {
+        let scheduler = scheduler();
+        let settings = eye_only();
+        let start = start(&scheduler, &settings);
+
+        let fired: Vec<i64> = (1..=90)
+            .map(|step| start + TimeDelta::seconds(step * 30))
+            .filter(|&now| scheduler.tick_at(now, &settings, Duration::ZERO).is_some())
+            .map(|now| (now - start).num_minutes())
+            .collect();
+
+        assert_eq!(fired, vec![20, 40]);
+    }
+
+    #[test]
+    fn a_sleep_longer_than_the_idle_threshold_restarts_intervals() {
+        let scheduler = scheduler();
+        let mut settings = eye_only();
+        settings.idle_pause.enabled = true;
+        settings.idle_pause.minutes = 5;
+        let start = start(&scheduler, &settings);
+        assert!(run_awake(&scheduler, &settings, start, 5).is_empty());
+
+        // Asleep from minute 5 to minute 15; eye care was due at minute 20.
+        let wake = start + TimeDelta::minutes(15);
+        assert_eq!(scheduler.tick_at(wake, &settings, Duration::ZERO), None);
+
         assert_eq!(
             run_awake(&scheduler, &settings, wake, 21),
             vec![(20, CategoryKey::Eye)]
