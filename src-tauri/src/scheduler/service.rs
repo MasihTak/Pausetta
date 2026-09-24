@@ -72,6 +72,17 @@ impl<D: IdleDetector> SchedulerService<D> {
     ) -> Option<CategoryKey> {
         let mut state = self.lock();
 
+        // Triggers are wall-clock instants, so a clock set back (by hand or NTP) would
+        // otherwise delay every reminder by the size of the jump.
+        if let Some(jump_back) = state.last_tick_at.map(|last| last - now) {
+            if jump_back > TimeDelta::zero() {
+                state
+                    .triggers
+                    .values_mut()
+                    .for_each(|trigger| trigger.at -= jump_back);
+            }
+        }
+
         // No ticks run during sleep, so the gap counts as idle time.
         let time_since_last_tick = state
             .last_tick_at
@@ -270,6 +281,22 @@ mod tests {
         assert_eq!(
             run_awake(&scheduler, &settings, wake, 21),
             vec![(20, CategoryKey::Eye)]
+        );
+    }
+
+    #[test]
+    fn setting_the_clock_back_does_not_delay_reminders() {
+        let scheduler = scheduler();
+        let settings = eye_only();
+        let start = start(&scheduler, &settings);
+        assert!(run_awake(&scheduler, &settings, start, 10).is_empty());
+
+        // Ten minutes in, the clock jumps back two hours; eye care is still 10 minutes away.
+        let jumped = start + TimeDelta::minutes(10) - TimeDelta::hours(2);
+
+        assert_eq!(
+            run_awake(&scheduler, &settings, jumped, 11),
+            vec![(10, CategoryKey::Eye)]
         );
     }
 
