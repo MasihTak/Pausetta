@@ -141,11 +141,11 @@ describe("ReminderToast", () => {
     const { toast } = await mountToast();
 
     vi.advanceTimersByTime(10_000);
-    await toast.find(".toast-stage").trigger("mouseenter");
+    await toast.find(".toast").trigger("mouseenter");
     vi.advanceTimersByTime(60_000);
     expect(invoke).not.toHaveBeenCalledWith("close_reminder");
 
-    await toast.find(".toast-stage").trigger("mouseleave");
+    await toast.find(".toast").trigger("mouseleave");
     vi.advanceTimersByTime(3_999);
     expect(invoke).not.toHaveBeenCalledWith("close_reminder");
     vi.advanceTimersByTime(1);

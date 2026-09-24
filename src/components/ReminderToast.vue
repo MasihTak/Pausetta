@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { cursorPosition, getCurrentWindow } from "@tauri-apps/api/window";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
 import { CATEGORY_BY_KEY } from "../constants/categories.js";
@@ -17,6 +18,9 @@ const isTopAnchored = window.__PAUSETTA_REMINDER_ANCHOR__ === "top";
 const AUTO_DISMISS_MS = 14_000;
 // Outlasts the eye cue's 20s ring.
 const EYE_AUTO_DISMISS_MS = 22_000;
+const CURSOR_CHECK_MS = 50;
+
+const card = ref(null);
 
 const category = computed(() => CATEGORY_BY_KEY[categoryKey.value]);
 const intervalMinutes = computed(
@@ -31,6 +35,7 @@ let dismissTimer;
 let dismissDeadline;
 let remainingMs;
 let isHovered = false;
+let isTrackingCursor = true;
 
 function startDismissTimer(durationMs) {
   clearTimeout(dismissTimer);
@@ -56,9 +61,43 @@ function resumeDismissTimer() {
   startDismissTimer(remainingMs);
 }
 
+function isCursorOverCard(cursor, windowPosition, scaleFactor) {
+  const bounds = card.value?.getBoundingClientRect();
+  if (!bounds) return false;
+  const x = (cursor.x - windowPosition.x) / scaleFactor;
+  const y = (cursor.y - windowPosition.y) / scaleFactor;
+  return x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The window is larger than the card to fit its glow. That invisible margin must not
+// swallow clicks meant for the apps underneath, and a click-through window receives no
+// mouse events, so the cursor is polled to switch click-through off over the card.
+async function letClicksThroughOutsideCard() {
+  const appWindow = getCurrentWindow();
+  const [windowPosition, scaleFactor] = await Promise.all([
+    appWindow.innerPosition(),
+    appWindow.scaleFactor(),
+  ]);
+  let isIgnoringCursor;
+  while (isTrackingCursor) {
+    const cursor = await cursorPosition();
+    const shouldIgnoreCursor = !isCursorOverCard(cursor, windowPosition, scaleFactor);
+    if (shouldIgnoreCursor !== isIgnoringCursor) {
+      await appWindow.setIgnoreCursorEvents(shouldIgnoreCursor);
+      isIgnoringCursor = shouldIgnoreCursor;
+    }
+    await sleep(CURSOR_CHECK_MS);
+  }
+}
+
 onMounted(async () => {
   store.load().catch((error) => console.error("[pausetta] could not load settings", error));
   restartDismissTimer();
+  letClicksThroughOutsideCard().catch((error) =>
+    console.error("[pausetta] could not make the toast's margin click-through", error),
+  );
   stopListening = await listen("reminder-changed", (event) => {
     categoryKey.value = event.payload;
     showCount.value += 1;
@@ -67,6 +106,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  isTrackingCursor = false;
   clearTimeout(dismissTimer);
   stopListening?.();
 });
@@ -87,14 +127,15 @@ function snooze() {
   <div
     class="toast-stage"
     :class="{ 'is-top': isTopAnchored }"
-    @mouseenter="pauseDismissTimer"
-    @mouseleave="resumeDismissTimer"
   >
     <article
       :key="`${categoryKey}-${showCount}`"
+      ref="card"
       class="toast"
       :style="{ '--cat': `var(--cat-${categoryKey})` }"
       aria-live="polite"
+      @mouseenter="pauseDismissTimer"
+      @mouseleave="resumeDismissTimer"
     >
       <div class="toast__glow" />
 
@@ -571,7 +612,7 @@ function snooze() {
   background: var(--cat);
   animation: progress-sweep 14s linear reverse forwards;
 
-  .toast-stage:hover & {
+  .toast:hover & {
     animation-play-state: paused;
   }
 }

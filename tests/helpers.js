@@ -1,6 +1,6 @@
 import { beforeEach, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { getVersion, invoke, listen, openUrl } from "./setup.js";
+import { appWindow, cursorPosition, getVersion, invoke, listen, openUrl } from "./setup.js";
 
 /** The shape Rust's `get_settings` returns — see src-tauri/src/settings/model.rs. */
 export function makeSettings(overrides = {}) {
@@ -30,6 +30,10 @@ export function useFreshApp() {
     listen.mockResolvedValue(vi.fn());
     getVersion.mockResolvedValue("1.2.3");
     openUrl.mockResolvedValue(undefined);
+    cursorPosition.mockResolvedValue({ x: 0, y: 0 });
+    appWindow.innerPosition.mockResolvedValue({ x: 0, y: 0 });
+    appWindow.scaleFactor.mockResolvedValue(1);
+    appWindow.setIgnoreCursorEvents.mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
