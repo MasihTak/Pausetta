@@ -19,6 +19,13 @@ use settings::service::SettingsService;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        // Must be registered first. A second launch opens Settings in the running copy
+        // instead of starting a second scheduler.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Err(error) = settings_window::show(app) {
+                eprintln!("[pausetta] could not open settings for a second launch: {error}");
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -39,7 +46,10 @@ pub fn run() {
 
             let handle = app.handle();
             let settings = app.state::<AppSettingsService>().get()?;
-            autostart::apply(handle, settings.launch_on_login)?;
+            // Non-fatal: a broken login item must not stop the reminders.
+            if let Err(error) = autostart::apply(handle, settings.launch_on_login) {
+                eprintln!("[pausetta] could not sync the login item: {error}");
+            }
             tray::create(handle)?;
             scheduler::spawn(handle);
 

@@ -25,13 +25,22 @@ const isOnboarding = computed(
 );
 
 onMounted(async () => {
-  stopListening = await Promise.all([
+  // A failed listener must not stop settings from loading, or the window stays blank.
+  const registrations = await Promise.allSettled([
     listen("show-screen", (event) => (screen.value = event.payload)),
     // The tray can pause or resume reminders behind this window's back.
     listen("settings-changed", () =>
       store.load().catch((error) => console.error("[pausetta] could not reload settings", error)),
     ),
   ]);
+  stopListening = registrations
+    .filter((registration) => registration.status === "fulfilled")
+    .map((registration) => registration.value);
+  registrations
+    .filter((registration) => registration.status === "rejected")
+    .forEach((registration) =>
+      console.error("[pausetta] could not listen for window events", registration.reason),
+    );
 
   try {
     await store.load();
@@ -135,7 +144,23 @@ function openAuthorSite() {
       >
         Couldn't load settings: {{ loadError }}
       </p>
-      <SettingsView v-else-if="store.settings" />
+      <template v-else-if="store.settings">
+        <div
+          v-if="store.saveError"
+          class="save-error"
+          role="alert"
+        >
+          <span>Couldn't save your change: {{ store.saveError }}</span>
+          <button
+            type="button"
+            class="save-error__dismiss"
+            @click="store.dismissSaveError"
+          >
+            Dismiss
+          </button>
+        </div>
+        <SettingsView />
+      </template>
     </main>
 
     <footer class="app-footer">
@@ -223,5 +248,38 @@ main {
   padding: 18px 16px;
   font-size: 13px;
   color: var(--text2);
+}
+
+// Sticky so it stays in view when the change was made far down the scrolled Settings list.
+.save-error {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--card);
+  font-size: 12.5px;
+  color: var(--text);
+
+  span {
+    flex: 1;
+  }
+}
+
+.save-error__dismiss {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--accent-hover);
+  }
 }
 </style>

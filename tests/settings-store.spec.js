@@ -49,6 +49,19 @@ describe("useSettingsStore", () => {
     expect(store.settings.categories.eye.intervalMinutes).toBe(20);
   });
 
+  it("keeps Rust's reason for a rejected change until the next save succeeds", async () => {
+    const store = useSettingsStore();
+    await store.load();
+
+    invoke.mockRejectedValueOnce("could not register login item");
+    await store.update((settings) => (settings.launchOnLogin = true));
+    expect(store.saveError).toBe("could not register login item");
+
+    invoke.mockResolvedValueOnce(makeSettings());
+    await store.update((settings) => (settings.soundEnabled = true));
+    expect(store.saveError).toBe("");
+  });
+
   it("survives a reload that also fails", async () => {
     const store = useSettingsStore();
     await store.load();
