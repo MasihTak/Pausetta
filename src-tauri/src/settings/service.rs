@@ -1,3 +1,5 @@
+use std::sync::{Mutex, MutexGuard};
+
 use chrono::{DateTime, Local, TimeDelta, TimeZone, Utc};
 
 use super::model::{PauseKind, PauseState, Settings};
@@ -5,22 +7,30 @@ use super::repository::SettingsRepository;
 
 pub struct SettingsService<R: SettingsRepository> {
     repository: R,
+    /// Serializes load → change → save, so concurrent writers can't revert each other.
+    write_lock: Mutex<()>,
 }
 
 impl<R: SettingsRepository> SettingsService<R> {
     pub fn new(repository: R) -> Self {
-        Self { repository }
+        Self {
+            repository,
+            write_lock: Mutex::new(()),
+        }
     }
 
     pub fn get(&self) -> Result<Settings, String> {
         self.get_at(Utc::now())
     }
 
-    pub fn update(&self, mut requested: Settings) -> Result<Settings, String> {
+    pub fn update(&self, requested: Settings) -> Result<Settings, String> {
         requested.validate()?;
-        // Pause only changes through pause/resume, so a stale settings form can't undo it.
-        requested.pause = self.repository.load()?.pause;
-        self.repository.save(&requested)?;
+        self.modify(|settings| {
+            // Pause only changes through pause/resume, so a stale settings form can't undo it.
+            let pause = settings.pause.take();
+            *settings = requested;
+            settings.pause = pause;
+        })?;
         self.get()
     }
 
@@ -29,35 +39,50 @@ impl<R: SettingsRepository> SettingsService<R> {
     }
 
     pub fn resume(&self) -> Result<Settings, String> {
-        let mut settings = self.repository.load()?;
-        settings.pause = None;
-        self.repository.save(&settings)?;
-        Ok(settings)
+        self.modify(|settings| settings.pause = None)
     }
 
     fn get_at(&self, now: DateTime<Utc>) -> Result<Settings, String> {
-        let mut settings = self.repository.load()?;
-        let has_expired_pause = settings
-            .pause
-            .as_ref()
-            .is_some_and(|pause| pause.until <= now);
-        if has_expired_pause {
-            settings.pause = None;
-            self.repository.save(&settings)?;
+        let settings = self.repository.load()?;
+        if !has_expired_pause(&settings, now) {
+            return Ok(settings);
         }
-        Ok(settings)
+        // Re-checked under the lock: a new pause may have landed since.
+        self.modify(|settings| {
+            if has_expired_pause(settings, now) {
+                settings.pause = None;
+            }
+        })
     }
 
     fn pause_at(&self, kind: PauseKind, now: DateTime<Utc>) -> Result<Settings, String> {
-        let mut settings = self.get_at(now)?;
         let until = match kind {
             PauseKind::OneHour => now + TimeDelta::hours(1),
             PauseKind::Today => next_local_midnight(now),
         };
-        settings.pause = Some(PauseState { kind, until });
+        self.modify(|settings| settings.pause = Some(PauseState { kind, until }))
+    }
+
+    fn modify(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, String> {
+        let _write_guard = self.lock_writes()?;
+        let mut settings = self.repository.load()?;
+        change(&mut settings);
         self.repository.save(&settings)?;
         Ok(settings)
     }
+
+    fn lock_writes(&self) -> Result<MutexGuard<'_, ()>, String> {
+        self.write_lock
+            .lock()
+            .map_err(|_| "settings write lock was poisoned".to_string())
+    }
+}
+
+fn has_expired_pause(settings: &Settings, now: DateTime<Utc>) -> bool {
+    settings
+        .pause
+        .as_ref()
+        .is_some_and(|pause| pause.until <= now)
 }
 
 fn next_local_midnight(now: DateTime<Utc>) -> DateTime<Utc> {
