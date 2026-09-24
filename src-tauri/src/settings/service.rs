@@ -154,7 +154,9 @@ mod tests {
 
         assert!(until > now);
         assert!(until - now <= TimeDelta::days(1));
-        assert_eq!(until.with_timezone(&Local).time(), NaiveTime::MIN);
+        // On DST days where midnight doesn't exist, next_local_midnight falls back to a full day.
+        let is_local_midnight = until.with_timezone(&Local).time() == NaiveTime::MIN;
+        assert!(is_local_midnight || until == now + TimeDelta::days(1));
     }
 
     #[test]
