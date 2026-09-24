@@ -19,6 +19,13 @@ use settings::service::SettingsService;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        // Must be registered first. A second launch opens Settings in the running copy
+        // instead of starting a second scheduler.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Err(error) = settings_window::show(app) {
+                eprintln!("[pausetta] could not open settings for a second launch: {error}");
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
