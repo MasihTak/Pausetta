@@ -1,4 +1,4 @@
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::autostart;
 use crate::reminder_window;
@@ -48,16 +48,16 @@ pub async fn show_reminder(app: AppHandle, category: CategoryKey) -> Result<(), 
 }
 
 #[tauri::command]
-pub async fn close_reminder(app: AppHandle) -> Result<(), String> {
-    reminder_window::close(&app).map_err(|error| error.to_string())
+pub async fn close_reminder(window: WebviewWindow) -> Result<(), String> {
+    reminder_window::close(&window).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub async fn snooze_reminder(
-    app: AppHandle,
+    window: WebviewWindow,
     scheduler: State<'_, AppSchedulerService>,
     category: CategoryKey,
 ) -> Result<(), String> {
     scheduler.snooze(category);
-    reminder_window::close(&app).map_err(|error| error.to_string())
+    reminder_window::close(&window).map_err(|error| error.to_string())
 }
