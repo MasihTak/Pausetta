@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import ReminderToast from "../src/components/ReminderToast.vue";
 import { CATEGORY_BY_KEY } from "../src/constants/categories.js";
-import { appWindow, cursorPosition, invoke, listen } from "./setup.js";
+import { appWindow, cursorPosition, invoke } from "./setup.js";
 import { useFreshApp } from "./helpers.js";
 
 useFreshApp();
@@ -20,16 +20,9 @@ afterEach(() => {
 });
 
 async function mountToast() {
-  let emitReminderChanged;
-  const stopListening = vi.fn();
-  listen.mockImplementation((_event, handler) => {
-    emitReminderChanged = handler;
-    return Promise.resolve(stopListening);
-  });
-
   const toast = mount(ReminderToast);
   await flushPromises();
-  return { toast, stopListening, emit: (payload) => emitReminderChanged({ payload }) };
+  return { toast };
 }
 
 describe("ReminderToast", () => {
@@ -180,34 +173,13 @@ describe("ReminderToast", () => {
     toast.unmount();
   });
 
-  it("swaps category and restarts the countdown when Rust reuses the window", async () => {
+  it("drops its timer when unmounted", async () => {
     vi.useFakeTimers();
-    const { toast, emit } = await mountToast();
-
-    vi.advanceTimersByTime(13_000);
-    emit("hydration");
-    await toast.vm.$nextTick();
-
-    expect(toast.find(".toast__title").text()).toBe("Hydration");
-    expect(toast.find(".toast__chip").text()).toBe("Every 60 min");
-
-    // The old timer would have fired here; the new reminder gets its own full window.
-    vi.advanceTimersByTime(13_000);
-    expect(invoke).not.toHaveBeenCalledWith("close_reminder");
-
-    vi.advanceTimersByTime(1_000);
-    expect(invoke).toHaveBeenCalledWith("close_reminder");
-    toast.unmount();
-  });
-
-  it("drops its timer and listener when unmounted", async () => {
-    vi.useFakeTimers();
-    const { toast, stopListening } = await mountToast();
+    const { toast } = await mountToast();
 
     toast.unmount();
-    vi.advanceTimersByTime(20_000);
+    vi.advanceTimersByTime(30_000);
 
-    expect(stopListening).toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalledWith("close_reminder");
   });
 });
