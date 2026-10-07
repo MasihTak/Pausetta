@@ -17,6 +17,10 @@ const OVERDUE_GRACE: TimeDelta = TimeDelta::minutes(5);
 /// minutes would collide with eye care at 20 every single time and never fire).
 const COLLISION_DELAY: TimeDelta = TimeDelta::minutes(1);
 
+/// How long a reminder whose toast failed to open waits before trying again. Long enough
+/// that a persistent failure costs one attempt and one log line a minute, nothing more.
+const RETRY_DELAY: TimeDelta = TimeDelta::minutes(1);
+
 /// How far a snoozed reminder is pushed back before its normal interval resumes.
 pub const SNOOZE_MINUTES: i64 = 10;
 
@@ -57,8 +61,18 @@ impl<D: IdleDetector> SchedulerService<D> {
 
     /// Pushes one category back by [`SNOOZE_MINUTES`]; its normal interval resumes after.
     pub fn snooze(&self, category: CategoryKey) {
+        self.reschedule_in(category, TimeDelta::minutes(SNOOZE_MINUTES));
+    }
+
+    /// For a reminder that came due but could not be shown: tries again after
+    /// [`RETRY_DELAY`] instead of losing the whole cycle.
+    pub fn retry_soon(&self, category: CategoryKey) {
+        self.reschedule_in(category, RETRY_DELAY);
+    }
+
+    fn reschedule_in(&self, category: CategoryKey, delay: TimeDelta) {
         if let Some(trigger) = self.lock().triggers.get_mut(&category) {
-            trigger.at = Utc::now() + TimeDelta::minutes(SNOOZE_MINUTES);
+            trigger.at = Utc::now() + delay;
         }
     }
 
@@ -459,6 +473,23 @@ mod tests {
         let snoozed_until = scheduler.lock().triggers[&CategoryKey::Eye].at;
         let expected = Utc::now() + TimeDelta::minutes(SNOOZE_MINUTES);
         assert!((snoozed_until - expected).abs() < TimeDelta::seconds(5));
+    }
+
+    #[test]
+    fn a_reminder_that_could_not_be_shown_is_retried_soon() {
+        let scheduler = scheduler();
+        let settings = eye_only();
+        let start = start(&scheduler, &settings);
+        assert_eq!(
+            run_awake(&scheduler, &settings, start, 21),
+            vec![(20, CategoryKey::Eye)]
+        );
+
+        scheduler.retry_soon(CategoryKey::Eye);
+
+        let retry_at = scheduler.lock().triggers[&CategoryKey::Eye].at;
+        let expected = Utc::now() + RETRY_DELAY;
+        assert!((retry_at - expected).abs() < TimeDelta::seconds(5));
     }
 
     #[test]
