@@ -34,15 +34,18 @@ fn tick(app: &AppHandle) {
         }
     };
 
-    let Some(category) = app.state::<AppSchedulerService>().tick(&settings) else {
+    let scheduler = app.state::<AppSchedulerService>();
+    let Some(category) = scheduler.tick(&settings) else {
         return;
     };
 
     if let Err(error) = reminder_window::show(app, category) {
         eprintln!(
-            "[pausetta] could not show the {} reminder: {error}",
+            "[pausetta] could not show the {} reminder, retrying soon: {error}",
             category.as_str()
         );
+        // The tick already moved this category a full interval ahead.
+        scheduler.retry_soon(category);
         return;
     }
     // Only after the window opened, so a failure never leaves a chime with nothing to see.
