@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { cursorPosition, getCurrentWindow } from "@tauri-apps/api/window";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
@@ -9,9 +8,8 @@ import { CATEGORY_BY_KEY } from "../constants/categories.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 const store = useSettingsStore();
-const categoryKey = ref(window.__PAUSETTA_REMINDER_CATEGORY__);
-// Bumped when Rust reuses this window for a new reminder, to replay the card's animations.
-const showCount = ref(0);
+// A toast shows one reminder for its whole life: Rust opens a new window for the next one.
+const categoryKey = window.__PAUSETTA_REMINDER_CATEGORY__;
 // Set by Rust in reminder_window.rs, from the same platform check that positions the window.
 const isTopAnchored = window.__PAUSETTA_REMINDER_ANCHOR__ === "top";
 
@@ -22,19 +20,15 @@ const CURSOR_CHECK_MS = 50;
 
 const card = ref(null);
 
-const category = computed(() => CATEGORY_BY_KEY[categoryKey.value]);
+const category = CATEGORY_BY_KEY[categoryKey];
 const intervalMinutes = computed(
-  () => store.settings?.categories[categoryKey.value].intervalMinutes,
+  () => store.settings?.categories[categoryKey].intervalMinutes,
 );
-const autoDismissMs = computed(() =>
-  categoryKey.value === "eye" ? EYE_AUTO_DISMISS_MS : AUTO_DISMISS_MS,
-);
+const autoDismissMs = categoryKey === "eye" ? EYE_AUTO_DISMISS_MS : AUTO_DISMISS_MS;
 
-let stopListening;
 let dismissTimer;
 let dismissDeadline;
 let remainingMs;
-let isHovered = false;
 let isTrackingCursor = true;
 
 function startDismissTimer(durationMs) {
@@ -43,21 +37,13 @@ function startDismissTimer(durationMs) {
   dismissTimer = setTimeout(dismiss, durationMs);
 }
 
-// An unattended reminder closes itself rather than waiting on the desk all afternoon.
-function restartDismissTimer() {
-  remainingMs = autoDismissMs.value;
-  if (!isHovered) startDismissTimer(remainingMs);
-}
-
 // The progress bar pauses on the same hover, in CSS.
 function pauseDismissTimer() {
-  isHovered = true;
   clearTimeout(dismissTimer);
   remainingMs = Math.max(0, dismissDeadline - Date.now());
 }
 
 function resumeDismissTimer() {
-  isHovered = false;
   startDismissTimer(remainingMs);
 }
 
@@ -92,23 +78,18 @@ async function letClicksThroughOutsideCard() {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   store.load().catch((error) => console.error("[pausetta] could not load settings", error));
-  restartDismissTimer();
+  // An unattended reminder closes itself rather than waiting on the desk all afternoon.
+  startDismissTimer(autoDismissMs);
   letClicksThroughOutsideCard().catch((error) =>
     console.error("[pausetta] could not make the toast's margin click-through", error),
   );
-  stopListening = await listen("reminder-changed", (event) => {
-    categoryKey.value = event.payload;
-    showCount.value += 1;
-    restartDismissTimer();
-  });
 });
 
 onUnmounted(() => {
   isTrackingCursor = false;
   clearTimeout(dismissTimer);
-  stopListening?.();
 });
 
 function dismiss() {
@@ -117,7 +98,7 @@ function dismiss() {
 
 // Rust owns the schedule, so snoozing is a request to move this category's next trigger.
 function snooze() {
-  invoke("snooze_reminder", { category: categoryKey.value }).catch((error) =>
+  invoke("snooze_reminder", { category: categoryKey }).catch((error) =>
     console.error("[pausetta] could not snooze reminder", error),
   );
 }
@@ -129,7 +110,6 @@ function snooze() {
     :class="{ 'is-top': isTopAnchored }"
   >
     <article
-      :key="`${categoryKey}-${showCount}`"
       ref="card"
       class="toast"
       :style="{ '--cat': `var(--cat-${categoryKey})` }"

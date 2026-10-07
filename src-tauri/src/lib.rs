@@ -45,7 +45,13 @@ pub fn run() {
             app.manage(SchedulerService::new(SystemIdleDetector));
 
             let handle = app.handle();
-            let settings = app.state::<AppSettingsService>().get()?;
+            let settings_service = app.state::<AppSettingsService>();
+            let mut settings = settings_service.get()?;
+            // Disabled in Startup apps: turn the setting off rather than re-enable it.
+            if settings.launch_on_login && autostart::is_disabled_in_startup_apps(handle) {
+                settings.launch_on_login = false;
+                settings = settings_service.update(settings)?;
+            }
             // Non-fatal: a broken login item must not stop the reminders.
             if let Err(error) = autostart::apply(handle, settings.launch_on_login) {
                 eprintln!("[pausetta] could not sync the login item: {error}");

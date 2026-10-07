@@ -1,4 +1,4 @@
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::autostart;
 use crate::reminder_window;
@@ -20,10 +20,16 @@ pub fn get_settings(service: State<'_, AppSettingsService>) -> Result<Settings, 
 pub fn update_settings(
     app: AppHandle,
     service: State<'_, AppSettingsService>,
-    settings: Settings,
+    mut settings: Settings,
 ) -> Result<Settings, String> {
     // OS first: if it refuses the login item, nothing is saved.
     settings.validate()?;
+    // Switching the toggle on is a fresh request; an unrelated save must not undo a
+    // Startup apps "Disabled".
+    let was_launching_on_login = service.get()?.launch_on_login;
+    if was_launching_on_login && autostart::is_disabled_in_startup_apps(&app) {
+        settings.launch_on_login = false;
+    }
     autostart::apply(&app, settings.launch_on_login)?;
     service.update(settings)
 }
@@ -48,16 +54,16 @@ pub async fn show_reminder(app: AppHandle, category: CategoryKey) -> Result<(), 
 }
 
 #[tauri::command]
-pub async fn close_reminder(app: AppHandle) -> Result<(), String> {
-    reminder_window::close(&app).map_err(|error| error.to_string())
+pub async fn close_reminder(window: WebviewWindow) -> Result<(), String> {
+    reminder_window::close(&window).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub async fn snooze_reminder(
-    app: AppHandle,
+    window: WebviewWindow,
     scheduler: State<'_, AppSchedulerService>,
     category: CategoryKey,
 ) -> Result<(), String> {
     scheduler.snooze(category);
-    reminder_window::close(&app).map_err(|error| error.to_string())
+    reminder_window::close(&window).map_err(|error| error.to_string())
 }
