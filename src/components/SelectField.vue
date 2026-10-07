@@ -1,5 +1,5 @@
 <script setup>
-const selected = defineModel({ required: true });
+const selected = defineModel({ type: [String, Number], required: true });
 
 defineProps({
   options: { type: Array, required: true },

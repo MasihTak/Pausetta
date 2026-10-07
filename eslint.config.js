@@ -13,9 +13,6 @@ export default [
   {
     languageOptions: {
       globals: {
-        process: "readonly",
-        fetch: "readonly",
-        localStorage: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
         setTimeout: "readonly",
@@ -28,7 +25,7 @@ export default [
     },
     files: ["**/*.{js,vue}"],
     rules: {
-      "no-console": "warn",
+      "no-console": ["warn", { allow: ["error", "warn"] }],
       "no-debugger": "error",
       "vue/no-unused-vars": "error",
       "vue/max-attributes-per-line": "error",
@@ -39,7 +36,6 @@ export default [
           registeredComponentsOnly: true,
           ignores: [],
           globals: [
-            "RouterView",
             "Teleport",
             "Component",
             "Transition",
