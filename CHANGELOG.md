@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.1](https://github.com/MasihTak/Pausetta/compare/v0.2.0...v0.2.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **autostart:** respect a Startup apps disable ([5867377](https://github.com/MasihTak/Pausetta/commit/5867377ff8f4ae7f7c069d9dff24838d350683fc))
+* **autostart:** respect a Startup apps disable ([3c0105f](https://github.com/MasihTak/Pausetta/commit/3c0105f9493919f3d54df92daa7cadd423052904))
+* **autostart:** rewrite a login item left pointing at an old path ([c8ca251](https://github.com/MasihTak/Pausetta/commit/c8ca251464d85bcfae924c75a63b2c865f039b2c))
+* **autostart:** rewrite a login item left pointing at an old path ([79761bb](https://github.com/MasihTak/Pausetta/commit/79761bb0ff31be0abdb7f513adad0b0ae7092971))
+* **reminder:** stack concurrent toasts instead of replacing the open one ([c6217ab](https://github.com/MasihTak/Pausetta/commit/c6217abdd38ea53beeb79d0609b5c1aa32b832a6))
+* **reminder:** stack concurrent toasts instead of replacing the open one ([7ad228c](https://github.com/MasihTak/Pausetta/commit/7ad228cd9123f7c76921070f3aa6ce99cdd72587)), closes [#4](https://github.com/MasihTak/Pausetta/issues/4)
+* **scheduler:** retry a reminder whose toast window failed to open ([864a730](https://github.com/MasihTak/Pausetta/commit/864a7300bf076aa1d767e408845daefba52491de))
+* **scheduler:** retry a reminder whose toast window failed to open ([4ff3087](https://github.com/MasihTak/Pausetta/commit/4ff3087df47bd8575002faa489fb6a1e37009fa1)), closes [#10](https://github.com/MasihTak/Pausetta/issues/10)
+
 ## [0.2.0](https://github.com/MasihTak/Pausetta/compare/v0.1.0...v0.2.0) (2026-09-24)
 
 
