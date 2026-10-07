@@ -37,6 +37,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Diagnostics_Debug",
     "Win32_UI_WindowsAndMessaging",
 ] }
+# Same version auto-launch already builds, to read the Startup apps choice it hides.
+winreg = "0.10"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
