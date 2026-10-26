@@ -9,6 +9,7 @@ mod tray;
 
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 use commands::AppSettingsService;
 use scheduler::idle::SystemIdleDetector;
@@ -23,9 +24,15 @@ pub fn run() {
         // instead of starting a second scheduler.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Err(error) = settings_window::show(app) {
-                eprintln!("[pausetta] could not open settings for a second launch: {error}");
+                log::error!("could not open settings for a second launch: {error}");
             }
         }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -34,36 +41,23 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // No dock icon: this is a tray app, not something you alt-tab to.
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            let data_dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&data_dir)?;
-            let repository = SqliteSettingsRepository::open(&data_dir.join("pausetta.db"))?;
-            app.manage(SettingsService::new(repository));
-            app.manage(SchedulerService::new(SystemIdleDetector));
-
-            let handle = app.handle();
-            let settings_service = app.state::<AppSettingsService>();
-            let mut settings = settings_service.get()?;
-            // Disabled in Startup apps: turn the setting off rather than re-enable it.
-            if settings.launch_on_login && autostart::is_disabled_in_startup_apps(handle) {
-                settings.launch_on_login = false;
-                settings = settings_service.update(settings)?;
-            }
-            // Non-fatal: a broken login item must not stop the reminders.
-            if let Err(error) = autostart::apply(handle, settings.launch_on_login) {
-                eprintln!("[pausetta] could not sync the login item: {error}");
-            }
-            tray::create(handle)?;
-            scheduler::spawn(handle);
-
-            // The app otherwise boots to the tray with nothing on screen. On a first run
-            // there is no reason to expect an icon down there, so the walkthrough — which
-            // is what points at the tray — opens itself once.
-            if !settings.onboarding_completed {
-                settings_window::show(handle)?;
+            // The app has no window at launch, so a failure here would otherwise look like
+            // it never started. Show it, then exit.
+            if let Err(error) = initialize(app) {
+                log::error!("startup failed: {error}");
+                let handle = app.handle().clone();
+                let log_dir = app
+                    .path()
+                    .app_log_dir()
+                    .map(|dir| dir.display().to_string())
+                    .unwrap_or_default();
+                app.dialog()
+                    .message(format!(
+                        "Pausetta could not start: {error}\n\nDetails are in {log_dir}"
+                    ))
+                    .title("Pausetta")
+                    .kind(MessageDialogKind::Error)
+                    .show(move |_| handle.exit(1));
             }
             Ok(())
         })
@@ -88,4 +82,39 @@ pub fn run() {
                 api.prevent_exit();
             }
         });
+}
+
+fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // No dock icon: this is a tray app, not something you alt-tab to.
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+    let data_dir = app.path().app_data_dir()?;
+    std::fs::create_dir_all(&data_dir)?;
+    let repository = SqliteSettingsRepository::open(&data_dir.join("pausetta.db"))?;
+    app.manage(SettingsService::new(repository));
+    app.manage(SchedulerService::new(SystemIdleDetector));
+
+    let handle = app.handle();
+    let settings_service = app.state::<AppSettingsService>();
+    let mut settings = settings_service.get()?;
+    // Disabled in Startup apps: turn the setting off rather than re-enable it.
+    if settings.launch_on_login && autostart::is_disabled_in_startup_apps(handle) {
+        settings.launch_on_login = false;
+        settings = settings_service.update(settings)?;
+    }
+    // Non-fatal: a broken login item must not stop the reminders.
+    if let Err(error) = autostart::apply(handle, settings.launch_on_login) {
+        log::error!("could not sync the login item: {error}");
+    }
+    tray::create(handle)?;
+    scheduler::spawn(handle);
+
+    // The app otherwise boots to the tray with nothing on screen. On a first run
+    // there is no reason to expect an icon down there, so the walkthrough — which
+    // is what points at the tray — opens itself once.
+    if !settings.onboarding_completed {
+        settings_window::show(handle)?;
+    }
+    Ok(())
 }
