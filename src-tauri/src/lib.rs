@@ -11,6 +11,7 @@ use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+use autostart::SystemLoginItem;
 use commands::AppSettingsService;
 use scheduler::idle::SystemIdleDetector;
 use scheduler::service::SchedulerService;
@@ -96,17 +97,9 @@ fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(SchedulerService::new(SystemIdleDetector));
 
     let handle = app.handle();
-    let settings_service = app.state::<AppSettingsService>();
-    let mut settings = settings_service.get()?;
-    // Disabled in Startup apps: turn the setting off rather than re-enable it.
-    if settings.launch_on_login && autostart::is_disabled_in_startup_apps(handle) {
-        settings.launch_on_login = false;
-        settings = settings_service.update(settings)?;
-    }
-    // Non-fatal: a broken login item must not stop the reminders.
-    if let Err(error) = autostart::apply(handle, settings.launch_on_login) {
-        log::error!("could not sync the login item: {error}");
-    }
+    let settings = app
+        .state::<AppSettingsService>()
+        .sync_login_item(&SystemLoginItem(handle))?;
     tray::create(handle)?;
     scheduler::spawn(handle);
 
