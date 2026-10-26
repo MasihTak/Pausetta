@@ -81,7 +81,7 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
     };
 
     if let Err(error) = result {
-        eprintln!("[pausetta] tray action '{}' failed: {error}", event.id().0);
+        log::error!("tray action '{}' failed: {error}", event.id().0);
     }
 }
 
