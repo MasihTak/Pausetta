@@ -76,7 +76,6 @@ describe("onboarding slides", () => {
     ]);
   });
 
-  // science-research.md asks for the caveat on every evidence claim; only the welcome is exempt.
   it("carries an evidence note on every category slide", () => {
     for (const slide of ONBOARDING_SLIDES.slice(1)) {
       expect(slide.note).toBeTruthy();

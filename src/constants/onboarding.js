@@ -1,5 +1,4 @@
-// One slide per reminder category, after a welcome. Bodies and notes follow
-// science-research.md: state what the evidence supports, and say so when it doesn't.
+// One slide per reminder category, after a welcome.
 export const ONBOARDING_SLIDES = [
   {
     key: "welcome",

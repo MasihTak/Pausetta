@@ -1,5 +1,3 @@
-// Copy is kept calm and non-absolute, per science-research.md: these are sensible habits,
-// not proven medical interventions.
 export const CATEGORIES = [
   {
     key: "eye",
