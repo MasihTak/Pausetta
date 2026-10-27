@@ -88,9 +88,10 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
 fn change_pause(app: &AppHandle, kind: Option<PauseKind>) -> Result<(), String> {
     let service = app.state::<AppSettingsService>();
     match kind {
-        Some(kind) => service.pause(kind)?,
-        None => service.resume()?,
-    };
+        Some(kind) => service.pause(kind),
+        None => service.resume(),
+    }
+    .map_err(|error| error.to_string())?;
     app.emit(SETTINGS_CHANGED_EVENT, ())
         .map_err(|error| error.to_string())
 }

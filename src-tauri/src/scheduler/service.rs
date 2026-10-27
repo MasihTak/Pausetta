@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
-use chrono::{DateTime, Local, TimeDelta, Timelike, Utc};
+use chrono::{DateTime, Local, TimeDelta, Utc};
 
 use super::idle::IdleDetector;
 use crate::settings::model::{CategoryKey, Settings};
@@ -167,19 +167,13 @@ fn is_within_quiet_hours(settings: &Settings, now: DateTime<Utc>) -> bool {
         return false;
     }
 
-    let (Some(start), Some(end)) = (
-        minutes_of_day(&quiet_hours.start),
-        minutes_of_day(&quiet_hours.end),
-    ) else {
-        return false;
-    };
+    let (start, end) = (quiet_hours.start, quiet_hours.end);
     // Equal bounds are an empty window, not a silent all-day one.
     if start == end {
         return false;
     }
 
-    let local_now = now.with_timezone(&Local);
-    let current = local_now.hour() * 60 + local_now.minute();
+    let current = now.with_timezone(&Local).time();
     if start < end {
         (start..end).contains(&current)
     } else {
@@ -187,15 +181,12 @@ fn is_within_quiet_hours(settings: &Settings, now: DateTime<Utc>) -> bool {
     }
 }
 
-fn minutes_of_day(value: &str) -> Option<u32> {
-    let (hours, minutes) = value.split_once(':')?;
-    Some(hours.parse::<u32>().ok()? * 60 + minutes.parse::<u32>().ok()?)
-}
-
 #[cfg(test)]
 mod tests {
+    use chrono::Timelike;
+
     use super::*;
-    use crate::settings::model::{PauseKind, PauseState};
+    use crate::settings::model::{time_of_day, PauseKind, PauseState};
 
     struct NeverIdle;
 
@@ -385,8 +376,8 @@ mod tests {
         let scheduler = scheduler();
         let mut settings = eye_only();
         settings.quiet_hours.enabled = true;
-        settings.quiet_hours.start = "00:00".into();
-        settings.quiet_hours.end = "23:30".into();
+        settings.quiet_hours.start = time_of_day(0, 0);
+        settings.quiet_hours.end = time_of_day(23, 30);
 
         let midday = at_local_hour(12);
         assert_eq!(scheduler.tick_at(midday, &settings, Duration::ZERO), None);
@@ -496,8 +487,8 @@ mod tests {
     fn quiet_hours_wrap_past_midnight() {
         let mut settings = Settings::default();
         settings.quiet_hours.enabled = true;
-        settings.quiet_hours.start = "22:00".into();
-        settings.quiet_hours.end = "08:00".into();
+        settings.quiet_hours.start = time_of_day(22, 0);
+        settings.quiet_hours.end = time_of_day(8, 0);
 
         assert!(is_within_quiet_hours(&settings, at_local_hour(23)));
         assert!(is_within_quiet_hours(&settings, at_local_hour(3)));
@@ -509,8 +500,8 @@ mod tests {
     fn quiet_hours_inside_one_day_do_not_wrap() {
         let mut settings = Settings::default();
         settings.quiet_hours.enabled = true;
-        settings.quiet_hours.start = "09:00".into();
-        settings.quiet_hours.end = "17:00".into();
+        settings.quiet_hours.start = time_of_day(9, 0);
+        settings.quiet_hours.end = time_of_day(17, 0);
 
         assert!(is_within_quiet_hours(&settings, at_local_hour(12)));
         assert!(!is_within_quiet_hours(&settings, at_local_hour(8)));

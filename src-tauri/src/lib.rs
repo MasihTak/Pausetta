@@ -93,7 +93,7 @@ fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let data_dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&data_dir)?;
     let repository = SqliteSettingsRepository::open(&data_dir.join("pausetta.db"))?;
-    app.manage(SettingsService::new(repository));
+    app.manage(SettingsService::new(repository)?);
     app.manage(SchedulerService::new(SystemIdleDetector));
 
     let handle = app.handle();
