@@ -182,16 +182,17 @@ describe("App onboarding", () => {
     expect(app.findComponent(SettingsView).exists()).toBe(true);
   });
 
-  it("logs a failed completion save rather than trapping the user", async () => {
+  it("shows why the completion save failed and stays on the walkthrough", async () => {
     invoke.mockResolvedValueOnce(unfinished());
     const { app } = await mountApp();
 
-    invoke.mockRejectedValueOnce(new Error("disk full"));
+    invoke.mockRejectedValueOnce("disk full");
     invoke.mockResolvedValueOnce(unfinished());
     app.findComponent(OnboardingView).vm.$emit("finish");
     await flushPromises();
 
-    expect(console.error).toHaveBeenCalled();
+    expect(app.findComponent(OnboardingView).exists()).toBe(true);
+    expect(app.find('[role="alert"]').text()).toContain("disk full");
   });
 });
 

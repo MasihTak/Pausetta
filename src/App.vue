@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import PauseMenu from "./components/PauseMenu.vue";
+import SaveErrorBanner from "./components/SaveErrorBanner.vue";
 import AboutView from "./views/AboutView.vue";
 import OnboardingView from "./views/OnboardingView.vue";
 import SettingsView from "./views/SettingsView.vue";
@@ -52,9 +53,7 @@ onMounted(async () => {
 onUnmounted(() => stopListening.forEach((stop) => stop()));
 
 function completeOnboarding() {
-  store
-    .update((settings) => (settings.onboardingCompleted = true))
-    .catch((error) => console.error("[pausetta] could not save onboarding completion", error));
+  store.update((settings) => (settings.onboardingCompleted = true));
 }
 
 function openAuthorSite() {
@@ -63,10 +62,10 @@ function openAuthorSite() {
 </script>
 
 <template>
-  <OnboardingView
-    v-if="isOnboarding"
-    @finish="completeOnboarding"
-  />
+  <template v-if="isOnboarding">
+    <SaveErrorBanner />
+    <OnboardingView @finish="completeOnboarding" />
+  </template>
 
   <div
     v-else
@@ -145,20 +144,7 @@ function openAuthorSite() {
         Couldn't load settings: {{ loadError }}
       </p>
       <template v-else-if="store.settings">
-        <div
-          v-if="store.saveError"
-          class="save-error"
-          role="alert"
-        >
-          <span>Couldn't save your change: {{ store.saveError }}</span>
-          <button
-            type="button"
-            class="save-error__dismiss"
-            @click="store.dismissSaveError"
-          >
-            Dismiss
-          </button>
-        </div>
+        <SaveErrorBanner />
         <SettingsView />
       </template>
     </main>
@@ -248,38 +234,5 @@ main {
   padding: 18px 16px;
   font-size: 13px;
   color: var(--text2);
-}
-
-// Sticky so it stays in view when the change was made far down the scrolled Settings list.
-.save-error {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-strong);
-  background: var(--card);
-  font-size: 12.5px;
-  color: var(--text);
-
-  span {
-    flex: 1;
-  }
-}
-
-.save-error__dismiss {
-  flex-shrink: 0;
-  padding: 4px 6px;
-  border: 0;
-  background: none;
-  font-weight: 600;
-  color: var(--accent);
-  cursor: pointer;
-
-  &:hover {
-    color: var(--accent-hover);
-  }
 }
 </style>

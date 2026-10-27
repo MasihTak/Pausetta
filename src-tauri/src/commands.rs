@@ -1,6 +1,6 @@
 use tauri::{AppHandle, State, WebviewWindow};
 
-use crate::autostart;
+use crate::autostart::SystemLoginItem;
 use crate::reminder_window;
 use crate::scheduler::idle::SystemIdleDetector;
 use crate::scheduler::service::SchedulerService;
@@ -20,18 +20,9 @@ pub fn get_settings(service: State<'_, AppSettingsService>) -> Result<Settings, 
 pub fn update_settings(
     app: AppHandle,
     service: State<'_, AppSettingsService>,
-    mut settings: Settings,
+    settings: Settings,
 ) -> Result<Settings, String> {
-    // OS first: if it refuses the login item, nothing is saved.
-    settings.validate()?;
-    // Switching the toggle on is a fresh request; an unrelated save must not undo a
-    // Startup apps "Disabled".
-    let was_launching_on_login = service.get()?.launch_on_login;
-    if was_launching_on_login && autostart::is_disabled_in_startup_apps(&app) {
-        settings.launch_on_login = false;
-    }
-    autostart::apply(&app, settings.launch_on_login)?;
-    service.update(settings)
+    service.update(settings, &SystemLoginItem(&app))
 }
 
 #[tauri::command]
