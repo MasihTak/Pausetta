@@ -13,6 +13,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 use autostart::SystemLoginItem;
 use commands::AppSettingsService;
+use reminder_window::ToastStack;
 use scheduler::idle::SystemIdleDetector;
 use scheduler::service::SchedulerService;
 use settings::repository::SqliteSettingsRepository;
@@ -69,6 +70,7 @@ pub fn run() {
             commands::resume_reminders,
             commands::show_reminder,
             commands::close_reminder,
+            commands::set_toast_card_bounds,
             commands::snooze_reminder,
         ])
         .build(tauri::generate_context!())
@@ -95,6 +97,7 @@ fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let repository = SqliteSettingsRepository::open(&data_dir.join("pausetta.db"))?;
     app.manage(SettingsService::new(repository)?);
     app.manage(SchedulerService::new(SystemIdleDetector));
+    app.manage(ToastStack::default());
 
     let handle = app.handle();
     let settings = app

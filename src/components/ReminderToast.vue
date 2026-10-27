@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { cursorPosition, getCurrentWindow } from "@tauri-apps/api/window";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
 import { CATEGORY_BY_KEY } from "../constants/categories.js";
@@ -16,7 +15,6 @@ const isTopAnchored = window.__PAUSETTA_REMINDER_ANCHOR__ === "top";
 const AUTO_DISMISS_MS = 14_000;
 // Outlasts the eye cue's 20s ring.
 const EYE_AUTO_DISMISS_MS = 22_000;
-const CURSOR_CHECK_MS = 50;
 
 const card = ref(null);
 
@@ -29,7 +27,6 @@ const autoDismissMs = categoryKey === "eye" ? EYE_AUTO_DISMISS_MS : AUTO_DISMISS
 let dismissTimer;
 let dismissDeadline;
 let remainingMs;
-let isTrackingCursor = true;
 
 function startDismissTimer(durationMs) {
   clearTimeout(dismissTimer);
@@ -47,48 +44,24 @@ function resumeDismissTimer() {
   startDismissTimer(remainingMs);
 }
 
-function isCursorOverCard(cursor, windowPosition, scaleFactor) {
-  const bounds = card.value?.getBoundingClientRect();
-  if (!bounds) return false;
-  const x = (cursor.x - windowPosition.x) / scaleFactor;
-  const y = (cursor.y - windowPosition.y) / scaleFactor;
-  return x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// The window is larger than the card to fit its glow. That invisible margin must not
-// swallow clicks meant for the apps underneath, and a click-through window receives no
-// mouse events, so the cursor is polled to switch click-through off over the card.
-async function letClicksThroughOutsideCard() {
-  const appWindow = getCurrentWindow();
-  const [windowPosition, scaleFactor] = await Promise.all([
-    appWindow.innerPosition(),
-    appWindow.scaleFactor(),
-  ]);
-  let isIgnoringCursor;
-  while (isTrackingCursor) {
-    const cursor = await cursorPosition();
-    const shouldIgnoreCursor = !isCursorOverCard(cursor, windowPosition, scaleFactor);
-    if (shouldIgnoreCursor !== isIgnoringCursor) {
-      await appWindow.setIgnoreCursorEvents(shouldIgnoreCursor);
-      isIgnoringCursor = shouldIgnoreCursor;
-    }
-    await sleep(CURSOR_CHECK_MS);
-  }
+// The window is larger than the card to fit its glow. Rust makes that invisible margin
+// click-through, so it needs to know where the card is.
+function reportCardBounds() {
+  const { left, top, right, bottom } = card.value.getBoundingClientRect();
+  invoke("set_toast_card_bounds", { bounds: { left, top, right, bottom } }).catch((error) =>
+    console.error("[pausetta] could not report the toast's bounds", error),
+  );
 }
 
 onMounted(() => {
   store.load().catch((error) => console.error("[pausetta] could not load settings", error));
   // An unattended reminder closes itself rather than waiting on the desk all afternoon.
   startDismissTimer(autoDismissMs);
-  letClicksThroughOutsideCard().catch((error) =>
-    console.error("[pausetta] could not make the toast's margin click-through", error),
-  );
+  // Again once the entrance animation ends: it moves the card, and Rust keeps the last report.
+  reportCardBounds();
 });
 
 onUnmounted(() => {
-  isTrackingCursor = false;
   clearTimeout(dismissTimer);
 });
 
@@ -114,6 +87,7 @@ function snooze() {
       class="toast"
       :style="{ '--cat': `var(--cat-${categoryKey})` }"
       aria-live="polite"
+      @animationend.self="reportCardBounds"
       @mouseenter="pauseDismissTimer"
       @mouseleave="resumeDismissTimer"
     >

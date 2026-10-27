@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::autostart::SystemLoginItem;
-use crate::reminder_window;
+use crate::reminder_window::{self, CardBounds, ToastStack};
 use crate::scheduler::idle::SystemIdleDetector;
 use crate::scheduler::service::SchedulerService;
 use crate::settings::error::SettingsError;
@@ -48,6 +48,15 @@ pub async fn show_reminder(app: AppHandle, category: CategoryKey) -> Result<(), 
 #[tauri::command]
 pub async fn close_reminder(window: WebviewWindow) -> Result<(), String> {
     reminder_window::close(&window).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_toast_card_bounds(
+    window: WebviewWindow,
+    stack: State<'_, ToastStack>,
+    bounds: CardBounds,
+) {
+    stack.set_card(window.label(), bounds);
 }
 
 #[tauri::command]
