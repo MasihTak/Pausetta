@@ -24,9 +24,8 @@ pub fn spawn(app: &AppHandle) {
 }
 
 fn tick(app: &AppHandle) {
-    // Re-read settings every tick: microseconds against an in-process database, and it keeps
-    // the scheduler honest about edits made in the UI and about a pause that has just expired.
-    let settings = match app.state::<AppSettingsService>().get() {
+    // Every tick, so edits made in the UI apply at once; this only writes on the tick a pause ends.
+    let settings = match app.state::<AppSettingsService>().expire_pause() {
         Ok(settings) => settings,
         Err(error) => {
             log::error!("could not read settings: {error}");

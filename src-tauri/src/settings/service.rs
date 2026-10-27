@@ -1,63 +1,66 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use chrono::{DateTime, Local, TimeDelta, TimeZone, Utc};
 
 use crate::autostart::LoginItem;
 
+use super::error::SettingsError;
 use super::model::{PauseKind, PauseState, Settings};
 use super::repository::SettingsRepository;
 
 pub struct SettingsService<R: SettingsRepository> {
     repository: R,
-    /// Serializes load → change → save, so concurrent writers can't revert each other.
-    write_lock: Mutex<()>,
+    /// The settings as last saved, so reads never touch the database. Also serializes
+    /// load → change → save, so concurrent writers can't revert each other.
+    current: Mutex<Settings>,
 }
 
 impl<R: SettingsRepository> SettingsService<R> {
-    pub fn new(repository: R) -> Self {
-        Self {
+    pub fn new(repository: R) -> Result<Self, SettingsError> {
+        let current = repository.load()?;
+        Ok(Self {
             repository,
-            write_lock: Mutex::new(()),
-        }
+            current: Mutex::new(current),
+        })
     }
 
-    pub fn get(&self) -> Result<Settings, String> {
-        self.get_at(Utc::now())
+    pub fn get(&self) -> Settings {
+        self.lock().clone()
     }
 
     pub fn update(
         &self,
         requested: Settings,
         login_item: &impl LoginItem,
-    ) -> Result<Settings, String> {
+    ) -> Result<Settings, SettingsError> {
         requested.validate()?;
-        {
-            let _write_guard = self.lock_writes()?;
-            let current = self.repository.load()?;
-            let mut settings = requested;
-            // Switching the toggle on is a fresh request; an unrelated save must not undo a
-            // Startup apps "Disabled".
-            if is_held_back_by_user(&current, login_item) {
-                settings.launch_on_login = false;
-            }
-            // OS first: if it refuses the login item, nothing is saved.
-            login_item.apply(settings.launch_on_login)?;
-            // Pause only changes through pause/resume, so a stale settings form can't undo it.
-            settings.pause = current.pause.clone();
-            if let Err(save_error) = self.repository.save(&settings) {
-                if let Err(restore_error) = login_item.apply(current.launch_on_login) {
-                    log::error!("could not restore the login item: {restore_error}");
-                }
-                return Err(save_error);
-            }
+        let mut current = self.lock();
+        let mut settings = requested;
+        // Switching the toggle on is a fresh request; an unrelated save must not undo a
+        // Startup apps "Disabled".
+        if is_held_back_by_user(&current, login_item) {
+            settings.launch_on_login = false;
         }
-        self.get()
+        // OS first: if it refuses the login item, nothing is saved.
+        login_item
+            .apply(settings.launch_on_login)
+            .map_err(SettingsError::Autostart)?;
+        // Pause only changes through pause/resume, so a stale settings form can't undo it.
+        settings.pause = current.pause.clone();
+        if let Err(save_error) = self.repository.save(&settings) {
+            if let Err(restore_error) = login_item.apply(current.launch_on_login) {
+                log::error!("could not restore the login item: {restore_error}");
+            }
+            return Err(save_error);
+        }
+        *current = settings.clone();
+        Ok(settings)
     }
 
     /// Startup counterpart of `update`: honours a Startup apps "Disabled", then repairs the
     /// OS login item so it matches the saved setting.
-    pub fn sync_login_item(&self, login_item: &impl LoginItem) -> Result<Settings, String> {
-        let mut settings = self.get()?;
+    pub fn sync_login_item(&self, login_item: &impl LoginItem) -> Result<Settings, SettingsError> {
+        let mut settings = self.get();
         if is_held_back_by_user(&settings, login_item) {
             settings = self.modify(|settings| settings.launch_on_login = false)?;
         }
@@ -68,28 +71,29 @@ impl<R: SettingsRepository> SettingsService<R> {
         Ok(settings)
     }
 
-    pub fn pause(&self, kind: PauseKind) -> Result<Settings, String> {
+    pub fn pause(&self, kind: PauseKind) -> Result<Settings, SettingsError> {
         self.pause_at(kind, Utc::now())
     }
 
-    pub fn resume(&self) -> Result<Settings, String> {
+    pub fn resume(&self) -> Result<Settings, SettingsError> {
         self.modify(|settings| settings.pause = None)
     }
 
-    fn get_at(&self, now: DateTime<Utc>) -> Result<Settings, String> {
-        let settings = self.repository.load()?;
-        if !has_expired_pause(&settings, now) {
-            return Ok(settings);
-        }
-        // Re-checked under the lock: a new pause may have landed since.
-        self.modify(|settings| {
-            if has_expired_pause(settings, now) {
-                settings.pause = None;
-            }
-        })
+    /// The settings with an elapsed pause cleared. The scheduler calls this each tick, so
+    /// the database is only written on the tick a pause actually ends.
+    pub fn expire_pause(&self) -> Result<Settings, SettingsError> {
+        self.expire_pause_at(Utc::now())
     }
 
-    fn pause_at(&self, kind: PauseKind, now: DateTime<Utc>) -> Result<Settings, String> {
+    fn expire_pause_at(&self, now: DateTime<Utc>) -> Result<Settings, SettingsError> {
+        let mut current = self.lock();
+        if has_expired_pause(&current, now) {
+            self.save_change(&mut current, |settings| settings.pause = None)?;
+        }
+        Ok(current.clone())
+    }
+
+    fn pause_at(&self, kind: PauseKind, now: DateTime<Utc>) -> Result<Settings, SettingsError> {
         let until = match kind {
             PauseKind::OneHour => now + TimeDelta::hours(1),
             PauseKind::Today => next_local_midnight(now),
@@ -97,18 +101,29 @@ impl<R: SettingsRepository> SettingsService<R> {
         self.modify(|settings| settings.pause = Some(PauseState { kind, until }))
     }
 
-    fn modify(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, String> {
-        let _write_guard = self.lock_writes()?;
-        let mut settings = self.repository.load()?;
-        change(&mut settings);
-        self.repository.save(&settings)?;
-        Ok(settings)
+    fn modify(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, SettingsError> {
+        let mut current = self.lock();
+        self.save_change(&mut current, change)?;
+        Ok(current.clone())
     }
 
-    fn lock_writes(&self) -> Result<MutexGuard<'_, ()>, String> {
-        self.write_lock
-            .lock()
-            .map_err(|_| "settings write lock was poisoned".to_string())
+    /// Saves first and only then updates `current`, so a failed save leaves both unchanged.
+    fn save_change(
+        &self,
+        current: &mut Settings,
+        change: impl FnOnce(&mut Settings),
+    ) -> Result<(), SettingsError> {
+        let mut changed = current.clone();
+        change(&mut changed);
+        self.repository.save(&changed)?;
+        *current = changed;
+        Ok(())
+    }
+
+    /// A panic while holding the lock leaves a complete `Settings` behind, and the scheduler
+    /// reads them every tick, so carrying on beats failing every call for the rest of the session.
+    fn lock(&self) -> MutexGuard<'_, Settings> {
+        self.current.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -143,10 +158,12 @@ fn next_local_midnight(now: DateTime<Utc>) -> DateTime<Utc> {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use chrono::NaiveTime;
 
     use super::*;
+    use crate::settings::model::time_of_day;
     use crate::settings::repository::SqliteSettingsRepository;
 
     #[derive(Default)]
@@ -170,15 +187,35 @@ mod tests {
         }
     }
 
+    fn disk_full() -> SettingsError {
+        SettingsError::Database(rusqlite::Error::InvalidQuery)
+    }
+
     struct FailingSaveRepository(Settings);
 
     impl SettingsRepository for FailingSaveRepository {
-        fn load(&self) -> Result<Settings, String> {
+        fn load(&self) -> Result<Settings, SettingsError> {
             Ok(self.0.clone())
         }
 
-        fn save(&self, _settings: &Settings) -> Result<(), String> {
-            Err("disk full".into())
+        fn save(&self, _settings: &Settings) -> Result<(), SettingsError> {
+            Err(disk_full())
+        }
+    }
+
+    #[derive(Default)]
+    struct CountingRepository {
+        loads: AtomicUsize,
+    }
+
+    impl SettingsRepository for CountingRepository {
+        fn load(&self) -> Result<Settings, SettingsError> {
+            self.loads.fetch_add(1, Ordering::Relaxed);
+            Ok(Settings::default())
+        }
+
+        fn save(&self, _settings: &Settings) -> Result<(), SettingsError> {
+            Ok(())
         }
     }
 
@@ -197,12 +234,12 @@ mod tests {
     }
 
     fn service() -> SettingsService<SqliteSettingsRepository> {
-        SettingsService::new(SqliteSettingsRepository::open_in_memory().unwrap())
+        SettingsService::new(SqliteSettingsRepository::open_in_memory().unwrap()).unwrap()
     }
 
     #[test]
     fn seeds_defaults_on_first_open() {
-        assert_eq!(service().get().unwrap(), Settings::default());
+        assert_eq!(service().get(), Settings::default());
     }
 
     #[test]
@@ -211,7 +248,7 @@ mod tests {
         let mut requested = Settings::default();
         requested.categories.eye.interval_minutes = 45;
         requested.categories.hydration.enabled = false;
-        requested.quiet_hours.start = "21:30".into();
+        requested.quiet_hours.start = time_of_day(21, 30);
         requested.sound_enabled = true;
         requested.onboarding_completed = true;
 
@@ -219,7 +256,7 @@ mod tests {
             .update(requested.clone(), &FakeLoginItem::default())
             .unwrap();
 
-        assert_eq!(service.get().unwrap(), requested);
+        assert_eq!(service.get(), requested);
     }
 
     #[test]
@@ -228,15 +265,37 @@ mod tests {
         let mut invalid_interval = Settings::default();
         invalid_interval.categories.posture.interval_minutes = 7;
         let mut invalid_time = Settings::default();
-        invalid_time.quiet_hours.end = "08:15".into();
+        invalid_time.quiet_hours.end = time_of_day(8, 15);
 
-        assert!(service
-            .update(invalid_interval, &FakeLoginItem::default())
-            .is_err());
-        assert!(service
-            .update(invalid_time, &FakeLoginItem::default())
-            .is_err());
-        assert_eq!(service.get().unwrap(), Settings::default());
+        assert!(matches!(
+            service.update(invalid_interval, &FakeLoginItem::default()),
+            Err(SettingsError::Validation(_))
+        ));
+        assert!(matches!(
+            service.update(invalid_time, &FakeLoginItem::default()),
+            Err(SettingsError::Validation(_))
+        ));
+        assert_eq!(service.get(), Settings::default());
+    }
+
+    #[test]
+    fn reads_are_served_from_memory() {
+        let service = SettingsService::new(CountingRepository::default()).unwrap();
+
+        service.get();
+        service.expire_pause().unwrap();
+        service.pause(PauseKind::OneHour).unwrap();
+        service.get();
+
+        assert_eq!(service.repository.loads.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn a_failed_save_leaves_the_settings_unchanged() {
+        let service = SettingsService::new(FailingSaveRepository(Settings::default())).unwrap();
+
+        assert!(service.pause(PauseKind::OneHour).is_err());
+        assert_eq!(service.get(), Settings::default());
     }
 
     #[test]
@@ -253,14 +312,23 @@ mod tests {
     }
 
     #[test]
-    fn expired_pause_is_cleared_on_read() {
+    fn expire_pause_clears_an_elapsed_pause() {
         let service = service();
         let now = Utc::now();
         service
             .pause_at(PauseKind::OneHour, now - TimeDelta::hours(2))
             .unwrap();
 
-        assert_eq!(service.get_at(now).unwrap().pause, None);
+        assert_eq!(service.expire_pause_at(now).unwrap().pause, None);
+        assert_eq!(service.get().pause, None);
+    }
+
+    #[test]
+    fn expire_pause_keeps_an_active_pause() {
+        let service = service();
+        service.pause(PauseKind::OneHour).unwrap();
+
+        assert!(service.expire_pause().unwrap().pause.is_some());
     }
 
     #[test]
@@ -310,13 +378,16 @@ mod tests {
             ..FakeLoginItem::default()
         };
 
-        assert!(service.update(launching_on_login(), &login_item).is_err());
-        assert_eq!(service.get().unwrap(), Settings::default());
+        assert!(matches!(
+            service.update(launching_on_login(), &login_item),
+            Err(SettingsError::Autostart(_))
+        ));
+        assert_eq!(service.get(), Settings::default());
     }
 
     #[test]
     fn update_restores_the_login_item_when_saving_fails() {
-        let service = SettingsService::new(FailingSaveRepository(Settings::default()));
+        let service = SettingsService::new(FailingSaveRepository(Settings::default())).unwrap();
         let login_item = FakeLoginItem::default();
 
         assert!(service.update(launching_on_login(), &login_item).is_err());
@@ -334,7 +405,7 @@ mod tests {
         let synced = service.sync_login_item(&login_item).unwrap();
 
         assert!(!synced.launch_on_login);
-        assert!(!service.get().unwrap().launch_on_login);
+        assert!(!service.get().launch_on_login);
         assert_eq!(*login_item.applied.borrow(), [false]);
     }
 

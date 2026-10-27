@@ -4,6 +4,7 @@ use crate::autostart::SystemLoginItem;
 use crate::reminder_window;
 use crate::scheduler::idle::SystemIdleDetector;
 use crate::scheduler::service::SchedulerService;
+use crate::settings::error::SettingsError;
 use crate::settings::model::{CategoryKey, PauseKind, Settings};
 use crate::settings::repository::SqliteSettingsRepository;
 use crate::settings::service::SettingsService;
@@ -12,7 +13,7 @@ pub type AppSettingsService = SettingsService<SqliteSettingsRepository>;
 pub type AppSchedulerService = SchedulerService<SystemIdleDetector>;
 
 #[tauri::command]
-pub fn get_settings(service: State<'_, AppSettingsService>) -> Result<Settings, String> {
+pub fn get_settings(service: State<'_, AppSettingsService>) -> Settings {
     service.get()
 }
 
@@ -21,7 +22,7 @@ pub fn update_settings(
     app: AppHandle,
     service: State<'_, AppSettingsService>,
     settings: Settings,
-) -> Result<Settings, String> {
+) -> Result<Settings, SettingsError> {
     service.update(settings, &SystemLoginItem(&app))
 }
 
@@ -29,12 +30,12 @@ pub fn update_settings(
 pub fn pause_reminders(
     service: State<'_, AppSettingsService>,
     kind: PauseKind,
-) -> Result<Settings, String> {
+) -> Result<Settings, SettingsError> {
     service.pause(kind)
 }
 
 #[tauri::command]
-pub fn resume_reminders(service: State<'_, AppSettingsService>) -> Result<Settings, String> {
+pub fn resume_reminders(service: State<'_, AppSettingsService>) -> Result<Settings, SettingsError> {
     service.resume()
 }
 
