@@ -7,6 +7,7 @@ import OnboardingScene from "../src/components/OnboardingScene.vue";
 import SelectField from "../src/components/SelectField.vue";
 import ToggleSwitch from "../src/components/ToggleSwitch.vue";
 import { CATEGORIES } from "../src/constants/categories.js";
+import { ONBOARDING_SLIDES } from "../src/constants/onboarding.js";
 import { useSettingsStore } from "../src/stores/settings.js";
 import { invoke } from "./setup.js";
 import { makeSettings, useFreshApp } from "./helpers.js";
@@ -79,12 +80,6 @@ describe("CategoryIcon", () => {
     expect(icon.attributes("width")).toBe("20");
     expect(icon.element.querySelectorAll("path, circle").length).toBeGreaterThan(0);
   });
-
-  it("draws nothing for an unknown category rather than throwing", () => {
-    const icon = mount(CategoryIcon, { props: { category: "nope" } });
-
-    expect(icon.element.querySelectorAll("path, circle")).toHaveLength(0);
-  });
 });
 
 describe("AppMark", () => {
@@ -99,14 +94,14 @@ describe("AppMark", () => {
 
 describe("OnboardingScene", () => {
   // All scenes mount at once in the carousel, so their clip-path ids must not collide.
-  it.each(["welcome", "eye", "posture", "movement", "hydration"])(
+  it.each(ONBOARDING_SLIDES.map((slide) => [slide.key, slide.scene]))(
     "draws the %s vignette with namespaced clip ids",
-    (category) => {
-      const scene = mount(OnboardingScene, { props: { category } });
+    (key, sceneComponent) => {
+      const scene = mount(OnboardingScene, { props: { scene: sceneComponent } });
 
       expect(scene.element.querySelectorAll("path, circle, rect").length).toBeGreaterThan(1);
       for (const clip of scene.element.querySelectorAll("clipPath")) {
-        expect(clip.id).toContain(category);
+        expect(clip.id).toContain(key);
       }
     },
   );

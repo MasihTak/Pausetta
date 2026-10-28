@@ -31,6 +31,13 @@ describe("categories", () => {
     }
   });
 
+  it("gives every category its icon and toast cue, so none renders blank", () => {
+    for (const category of CATEGORIES) {
+      expect(category.icon, `${category.key} icon`).toBeTruthy();
+      expect(category.toast.cueVisual, `${category.key} cue`).toBeTruthy();
+    }
+  });
+
   it("indexes categories by key", () => {
     expect(Object.keys(CATEGORY_BY_KEY)).toHaveLength(CATEGORIES.length);
     expect(CATEGORY_BY_KEY.eye).toBe(CATEGORIES[0]);
@@ -74,6 +81,12 @@ describe("onboarding slides", () => {
       "welcome",
       ...CATEGORIES.map((category) => category.key),
     ]);
+  });
+
+  it("gives every slide a scene", () => {
+    for (const slide of ONBOARDING_SLIDES) {
+      expect(slide.scene, `${slide.key} scene`).toBeTruthy();
+    }
   });
 
   it("carries an evidence note on every category slide", () => {

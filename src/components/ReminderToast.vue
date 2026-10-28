@@ -3,9 +3,8 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
-import ToastCue from "./ToastCue.vue";
 import UiIcon from "./UiIcon.vue";
-import { CATEGORY_BY_KEY, EYE_COUNTDOWN_SECONDS, SNOOZE_MINUTES } from "../constants/categories.js";
+import { CATEGORY_BY_KEY, SNOOZE_MINUTES } from "../constants/categories.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 const store = useSettingsStore();
@@ -14,9 +13,7 @@ const categoryKey = window.__PAUSETTA_REMINDER_CATEGORY__;
 // Set by Rust in reminder_window.rs, from the same platform check that positions the window.
 const isTopAnchored = window.__PAUSETTA_REMINDER_ANCHOR__ === "top";
 
-const AUTO_DISMISS_MS = 14_000;
-// Outlasts the eye cue's countdown ring.
-const EYE_AUTO_DISMISS_MS = (EYE_COUNTDOWN_SECONDS + 2) * 1000;
+const DEFAULT_AUTO_DISMISS_MS = 14_000;
 
 const card = ref(null);
 
@@ -24,7 +21,7 @@ const category = CATEGORY_BY_KEY[categoryKey];
 const intervalMinutes = computed(
   () => store.settings?.categories[categoryKey].intervalMinutes,
 );
-const autoDismissMs = categoryKey === "eye" ? EYE_AUTO_DISMISS_MS : AUTO_DISMISS_MS;
+const autoDismissMs = category.toast.autoDismissMs ?? DEFAULT_AUTO_DISMISS_MS;
 
 let dismissTimer;
 let dismissDeadline;
@@ -89,7 +86,6 @@ function snooze() {
       ref="card"
       class="toast"
       :style="{ '--cat': `var(--cat-${categoryKey})` }"
-      aria-live="polite"
       @animationend.self="reportCardBounds"
       @mouseenter="pauseDismissTimer"
       @mouseleave="resumeDismissTimer"
@@ -139,10 +135,10 @@ function snooze() {
               {{ category.toast.body }}
             </p>
 
-            <ToastCue
-              :category="categoryKey"
-              :text="category.toast.cue"
-            />
+            <div class="toast__cue">
+              <component :is="category.toast.cueVisual" />
+              <span class="toast__cue-text">{{ category.toast.cue }}</span>
+            </div>
 
             <div class="toast__actions">
               <button
@@ -341,6 +337,27 @@ function snooze() {
   text-wrap: pretty;
 }
 
+.toast__cue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 11px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--cat) 20%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cat) 9%, var(--card));
+}
+
+.toast__cue-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text2);
+  text-wrap: pretty;
+}
+
 .toast__actions {
   display: flex;
   align-items: center;
@@ -409,6 +426,11 @@ function snooze() {
       color-mix(in srgb, var(--cat) 84%, #15110e),
       color-mix(in srgb, var(--cat) 52%, #15110e)
     );
+  }
+
+  .toast__cue {
+    border-color: color-mix(in srgb, var(--cat) 26%, transparent);
+    background: color-mix(in srgb, var(--cat) 14%, var(--card));
   }
 
   .toast__primary {

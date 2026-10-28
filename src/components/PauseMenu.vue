@@ -6,6 +6,7 @@ import { useSettingsStore } from "../stores/settings.js";
 const store = useSettingsStore();
 const isMenuOpen = ref(false);
 const menuElement = useTemplateRef("menu");
+const triggerElement = useTemplateRef("trigger");
 
 // Display-only clock for the "time left" label; scheduling itself lives in Rust.
 const now = ref(Date.now());
@@ -46,21 +47,27 @@ async function openMenu() {
   menuElement.value?.querySelector("button")?.focus();
 }
 
+// The open menu holds focus, so closing it must hand focus back or it falls to the page top.
+function closeMenu() {
+  isMenuOpen.value = false;
+  triggerElement.value?.focus();
+}
+
 function toggleMenu() {
   if (isMenuOpen.value) {
-    isMenuOpen.value = false;
+    closeMenu();
     return;
   }
   openMenu();
 }
 
 function choose(action) {
-  isMenuOpen.value = false;
+  closeMenu();
   action();
 }
 
 function closeOnEscape(event) {
-  if (event.key === "Escape") isMenuOpen.value = false;
+  if (event.key === "Escape" && isMenuOpen.value) closeMenu();
 }
 
 onMounted(() => {
@@ -77,10 +84,10 @@ onUnmounted(() => {
 <template>
   <div class="pause">
     <button
+      ref="trigger"
       type="button"
       class="pause__button"
       :class="{ 'is-paused': isPaused }"
-      aria-haspopup="menu"
       :aria-expanded="isMenuOpen"
       @click="toggleMenu"
     >
@@ -96,16 +103,14 @@ onUnmounted(() => {
     <template v-if="isMenuOpen">
       <div
         class="pause__backdrop"
-        @click="isMenuOpen = false"
+        @click="closeMenu"
       />
       <div
         ref="menu"
         class="pause__menu"
-        role="menu"
       >
         <button
           type="button"
-          role="menuitem"
           class="pause__item"
           @click="choose(() => store.pause('oneHour'))"
         >
@@ -113,7 +118,6 @@ onUnmounted(() => {
         </button>
         <button
           type="button"
-          role="menuitem"
           class="pause__item"
           @click="choose(() => store.pause('today'))"
         >
@@ -122,7 +126,6 @@ onUnmounted(() => {
         <button
           v-if="isPaused"
           type="button"
-          role="menuitem"
           class="pause__item is-resume"
           @click="choose(store.resume)"
         >
