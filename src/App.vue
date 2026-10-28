@@ -28,6 +28,7 @@ const isOnboarding = computed(
 onMounted(async () => {
   // A failed listener must not stop settings from loading, or the window stays blank.
   const registrations = await Promise.allSettled([
+    // Event names are defined in Rust (settings_window.rs, tray.rs); change both together.
     listen("show-screen", (event) => (screen.value = event.payload)),
     // The tray can pause or resume reminders behind this window's back.
     listen("settings-changed", () =>

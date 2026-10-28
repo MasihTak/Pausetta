@@ -41,11 +41,6 @@ pub fn resume_reminders(service: State<'_, AppSettingsService>) -> Result<Settin
 
 // Window commands are async: creating a window from a sync command deadlocks on Windows.
 #[tauri::command]
-pub async fn show_reminder(app: AppHandle, category: CategoryKey) -> Result<(), String> {
-    reminder_window::show(&app, category).map_err(|error| error.to_string())
-}
-
-#[tauri::command]
 pub async fn close_reminder(window: WebviewWindow) -> Result<(), String> {
     reminder_window::close(&window).map_err(|error| error.to_string())
 }

@@ -1,5 +1,12 @@
 import { vi } from "vitest";
 
+// What Rust injects into every window (window_script.rs); the constants read it on import.
+window.__PAUSETTA_OPTIONS__ = {
+  intervalMinutes: [15, 20, 30, 45, 60],
+  idleMinutes: [3, 5, 10, 15, 30],
+  snoozeMinutes: 10,
+};
+
 // One mock per Tauri module the frontend imports. Tests import these same fns to
 // stub responses and assert calls — there is no Tauri runtime under jsdom.
 export const invoke = vi.fn();

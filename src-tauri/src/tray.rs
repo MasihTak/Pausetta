@@ -14,7 +14,8 @@ const RESUME_ID: &str = "resume";
 const QUIT_ID: &str = "quit";
 
 /// Emitted after the tray changes settings, so an already-open Settings window re-reads
-/// them instead of showing a stale pause state.
+/// them instead of showing a stale pause state. The frontend listens for this by name in
+/// src/App.vue; change both together.
 pub const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {

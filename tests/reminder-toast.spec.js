@@ -103,6 +103,12 @@ describe("ReminderToast", () => {
     expect(console.error).toHaveBeenCalledTimes(2);
   });
 
+  it("labels the snooze button with the length Rust uses", async () => {
+    const { toast } = await mountToast();
+
+    expect(toast.find(".toast__ghost").text()).toBe("Snooze 10 min");
+  });
+
   it("closes itself if nobody acts on it", async () => {
     window.__PAUSETTA_REMINDER_CATEGORY__ = "posture";
     vi.useFakeTimers();
