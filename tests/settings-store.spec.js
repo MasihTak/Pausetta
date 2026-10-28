@@ -91,10 +91,7 @@ describe("useSettingModel", () => {
     const store = useSettingsStore();
     await store.load();
 
-    const soundEnabled = useSettingModel(
-      (settings) => settings.soundEnabled,
-      (settings, value) => (settings.soundEnabled = value),
-    );
+    const soundEnabled = useSettingModel("soundEnabled");
 
     expect(soundEnabled.value).toBe(false);
   });
@@ -103,10 +100,7 @@ describe("useSettingModel", () => {
     const store = useSettingsStore();
     await store.load();
 
-    const idleMinutes = useSettingModel(
-      (settings) => settings.idlePause.minutes,
-      (settings, value) => (settings.idlePause.minutes = value),
-    );
+    const idleMinutes = useSettingModel("idlePause.minutes");
 
     invoke.mockResolvedValueOnce(makeSettings({ idlePause: { enabled: true, minutes: 15 } }));
     idleMinutes.value = 15;

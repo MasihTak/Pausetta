@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import PauseMenu from "./components/PauseMenu.vue";
+import UiIcon from "./components/UiIcon.vue";
 import SaveErrorBanner from "./components/SaveErrorBanner.vue";
 import AboutView from "./views/AboutView.vue";
 import OnboardingView from "./views/OnboardingView.vue";
@@ -25,8 +26,9 @@ const isOnboarding = computed(
   () => Boolean(store.settings) && !store.settings.onboardingCompleted,
 );
 
-onMounted(async () => {
-  // A failed listener must not stop settings from loading, or the window stays blank.
+// A failed listener must not stop settings from loading, or the window stays blank, so
+// failures are logged and the listeners that did register are kept.
+async function registerWindowListeners() {
   const registrations = await Promise.allSettled([
     // Event names are defined in Rust (settings_window.rs, tray.rs); change both together.
     listen("show-screen", (event) => (screen.value = event.payload)),
@@ -35,20 +37,27 @@ onMounted(async () => {
       store.load().catch((error) => console.error("[pausetta] could not reload settings", error)),
     ),
   ]);
-  stopListening = registrations
-    .filter((registration) => registration.status === "fulfilled")
-    .map((registration) => registration.value);
   registrations
     .filter((registration) => registration.status === "rejected")
     .forEach((registration) =>
       console.error("[pausetta] could not listen for window events", registration.reason),
     );
+  return registrations
+    .filter((registration) => registration.status === "fulfilled")
+    .map((registration) => registration.value);
+}
 
+async function loadSettingsOrShowError() {
   try {
     await store.load();
   } catch (error) {
     loadError.value = String(error);
   }
+}
+
+onMounted(async () => {
+  stopListening = await registerWindowListeners();
+  await loadSettingsOrShowError();
 });
 
 onUnmounted(() => stopListening.forEach((stop) => stop()));
@@ -82,34 +91,11 @@ function openAuthorSite() {
           aria-label="About"
           @click="screen = 'about'"
         >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            aria-hidden="true"
-          >
-            <circle
-              cx="12"
-              cy="12"
-              r="9"
-            />
-            <line
-              x1="12"
-              y1="11"
-              x2="12"
-              y2="16.5"
-            />
-            <circle
-              cx="12"
-              cy="7.7"
-              r="0.9"
-              fill="currentColor"
-              stroke="none"
-            />
-          </svg>
+          <UiIcon
+            name="info"
+            :size="15"
+            :stroke-width="1.8"
+          />
         </button>
       </template>
       <button
@@ -118,19 +104,10 @@ function openAuthorSite() {
         class="back-button"
         @click="screen = 'settings'"
       >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
+        <UiIcon
+          name="chevron-left"
+          :stroke-width="2.2"
+        />
         Back
       </button>
     </header>

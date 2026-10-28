@@ -56,6 +56,9 @@ export const INTERVAL_OPTIONS = minuteOptions(intervalMinutes);
 export const IDLE_OPTIONS = minuteOptions(idleMinutes);
 export const SNOOZE_MINUTES = snoozeMinutes;
 
+// How long the eye reminder's ring counts down (the 20-20-20 rule's 20 seconds).
+export const EYE_COUNTDOWN_SECONDS = 20;
+
 function formatTwelveHour(hour, minute) {
   const period = hour < 12 ? "AM" : "PM";
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;

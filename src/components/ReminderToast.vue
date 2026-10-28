@@ -3,7 +3,9 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
-import { CATEGORY_BY_KEY, SNOOZE_MINUTES } from "../constants/categories.js";
+import ToastCue from "./ToastCue.vue";
+import UiIcon from "./UiIcon.vue";
+import { CATEGORY_BY_KEY, EYE_COUNTDOWN_SECONDS, SNOOZE_MINUTES } from "../constants/categories.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 const store = useSettingsStore();
@@ -13,8 +15,8 @@ const categoryKey = window.__PAUSETTA_REMINDER_CATEGORY__;
 const isTopAnchored = window.__PAUSETTA_REMINDER_ANCHOR__ === "top";
 
 const AUTO_DISMISS_MS = 14_000;
-// Outlasts the eye cue's 20s ring.
-const EYE_AUTO_DISMISS_MS = 22_000;
+// Outlasts the eye cue's countdown ring.
+const EYE_AUTO_DISMISS_MS = (EYE_COUNTDOWN_SECONDS + 2) * 1000;
 
 const card = ref(null);
 
@@ -26,6 +28,7 @@ const autoDismissMs = categoryKey === "eye" ? EYE_AUTO_DISMISS_MS : AUTO_DISMISS
 
 let dismissTimer;
 let dismissDeadline;
+// Only meaningful between a pause (mouseenter) and the resume (mouseleave) that reads it.
 let remainingMs;
 
 function startDismissTimer(durationMs) {
@@ -110,29 +113,11 @@ function snooze() {
             aria-label="Close reminder"
             @click="dismiss"
           >
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 10 10"
-              aria-hidden="true"
-            >
-              <line
-                x1="0"
-                y1="0"
-                x2="10"
-                y2="10"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <line
-                x1="10"
-                y1="0"
-                x2="0"
-                y2="10"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-            </svg>
+            <UiIcon
+              name="close"
+              :size="9"
+              :stroke-width="2.4"
+            />
           </button>
         </header>
 
@@ -154,61 +139,10 @@ function snooze() {
               {{ category.toast.body }}
             </p>
 
-            <div class="toast__cue">
-              <div
-                v-if="categoryKey === 'eye'"
-                class="cue-ring"
-              >
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 30 30"
-                  aria-hidden="true"
-                >
-                  <circle
-                    cx="15"
-                    cy="15"
-                    r="13"
-                    class="cue-ring__track"
-                  />
-                  <circle
-                    cx="15"
-                    cy="15"
-                    r="13"
-                    class="cue-ring__progress"
-                  />
-                </svg>
-                <span class="cue-ring__label">20s</span>
-              </div>
-              <div
-                v-else-if="categoryKey === 'posture'"
-                class="cue-posture"
-                aria-hidden="true"
-              >
-                <span style="width: 16px" />
-                <span style="width: 11px; opacity: 0.75" />
-                <span style="width: 20px; opacity: 0.5" />
-              </div>
-              <div
-                v-else-if="categoryKey === 'movement'"
-                class="cue-bars"
-                aria-hidden="true"
-              >
-                <span
-                  v-for="barIndex in 4"
-                  :key="barIndex"
-                  :style="{ animationDelay: `${(barIndex - 1) * 150}ms` }"
-                />
-              </div>
-              <div
-                v-else-if="categoryKey === 'hydration'"
-                class="cue-glass"
-                aria-hidden="true"
-              >
-                <span />
-              </div>
-              <span class="toast__cue-text">{{ category.toast.cue }}</span>
-            </div>
+            <ToastCue
+              :category="categoryKey"
+              :text="category.toast.cue"
+            />
 
             <div class="toast__actions">
               <button
@@ -407,122 +341,6 @@ function snooze() {
   text-wrap: pretty;
 }
 
-.toast__cue {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 11px;
-  padding: 9px 11px;
-  border: 1px solid color-mix(in srgb, var(--cat) 20%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--cat) 9%, var(--card));
-}
-
-.toast__cue-text {
-  flex: 1;
-  min-width: 0;
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--text2);
-  text-wrap: pretty;
-}
-
-.cue-ring {
-  position: relative;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-
-  svg {
-    transform: rotate(-90deg);
-  }
-}
-
-.cue-ring__track,
-.cue-ring__progress {
-  fill: none;
-  stroke-width: 3;
-}
-
-.cue-ring__track {
-  stroke: color-mix(in srgb, var(--cat) 24%, var(--card));
-}
-
-.cue-ring__progress {
-  stroke: var(--cat-ink);
-  stroke-linecap: round;
-  stroke-dasharray: 82;
-  animation: cue-ring 20s linear forwards;
-}
-
-.cue-ring__label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8.5px;
-  font-weight: 700;
-  color: var(--cat-ink);
-}
-
-.cue-posture {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
-  width: 26px;
-
-  span {
-    height: 3px;
-    border-radius: 2px;
-    background: var(--cat-ink);
-  }
-}
-
-.cue-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  flex-shrink: 0;
-  width: 26px;
-  height: 22px;
-
-  span {
-    width: 4px;
-    height: 22px;
-    border-radius: 2px;
-    background: var(--cat-ink);
-    transform-origin: bottom;
-    animation: cue-bar 900ms ease-in-out infinite;
-  }
-}
-
-.cue-glass {
-  position: relative;
-  flex-shrink: 0;
-  width: 18px;
-  height: 24px;
-  margin: 0 4px;
-  overflow: hidden;
-  border: 2px solid var(--cat-ink);
-  border-top: none;
-  border-radius: 2px 2px 7px 7px;
-
-  span {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 80%;
-    background: var(--cat-ink);
-    opacity: 0.85;
-    animation: cue-fill 2.4s ease-in-out infinite alternate;
-  }
-}
-
 .toast__actions {
   display: flex;
   align-items: center;
@@ -564,7 +382,8 @@ function snooze() {
   width: 100%;
   height: 100%;
   background: var(--cat);
-  animation: progress-sweep 14s linear reverse forwards;
+  // The duration is bound inline to the same value as the dismiss timer.
+  animation: progress-sweep linear reverse forwards;
 
   .toast:hover & {
     animation-play-state: paused;
@@ -592,11 +411,6 @@ function snooze() {
     );
   }
 
-  .toast__cue {
-    border-color: color-mix(in srgb, var(--cat) 26%, transparent);
-    background: color-mix(in srgb, var(--cat) 14%, var(--card));
-  }
-
   .toast__primary {
     background: var(--cat);
     color: #15110e;
@@ -614,34 +428,6 @@ function snooze() {
   from {
     opacity: 0;
     transform: translateY(-14px) scale(0.97);
-  }
-}
-
-@keyframes cue-ring {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: 82;
-  }
-}
-
-@keyframes cue-bar {
-  0%,
-  100% {
-    transform: scaleY(0.3);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes cue-fill {
-  0% {
-    height: 24%;
-  }
-  100% {
-    height: 82%;
   }
 }
 

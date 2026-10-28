@@ -11,19 +11,8 @@ const props = defineProps({
 
 const categoryKey = props.category.key;
 
-const isEnabled = useSettingModel(
-  (settings) => settings.categories[categoryKey].enabled,
-  (settings, enabled) => {
-    settings.categories[categoryKey].enabled = enabled;
-  },
-);
-
-const intervalMinutes = useSettingModel(
-  (settings) => settings.categories[categoryKey].intervalMinutes,
-  (settings, minutes) => {
-    settings.categories[categoryKey].intervalMinutes = minutes;
-  },
-);
+const isEnabled = useSettingModel(`categories.${categoryKey}.enabled`);
+const intervalMinutes = useSettingModel(`categories.${categoryKey}.intervalMinutes`);
 </script>
 
 <template>
