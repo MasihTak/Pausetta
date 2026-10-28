@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import ReminderToast from "../src/components/ReminderToast.vue";
 import { CATEGORY_BY_KEY } from "../src/constants/categories.js";
-import { appWindow, cursorPosition, invoke } from "./setup.js";
+import { invoke } from "./setup.js";
 import { useFreshApp } from "./helpers.js";
 
 useFreshApp();
@@ -103,6 +103,12 @@ describe("ReminderToast", () => {
     expect(console.error).toHaveBeenCalledTimes(2);
   });
 
+  it("labels the snooze button with the length Rust uses", async () => {
+    const { toast } = await mountToast();
+
+    expect(toast.find(".toast__ghost").text()).toBe("Snooze 10 min");
+  });
+
   it("closes itself if nobody acts on it", async () => {
     window.__PAUSETTA_REMINDER_CATEGORY__ = "posture";
     vi.useFakeTimers();
@@ -146,30 +152,39 @@ describe("ReminderToast", () => {
     toast.unmount();
   });
 
-  it("lets clicks through everywhere but the card", async () => {
-    // A 2x screen with the window at (1000, 500): the cursor starts in the empty margin.
-    appWindow.innerPosition.mockResolvedValue({ x: 1000, y: 500 });
-    appWindow.scaleFactor.mockResolvedValue(2);
-    cursorPosition.mockResolvedValue({ x: 1010, y: 510 });
-    vi.useFakeTimers();
+  it("tells Rust where the card is, again once its entrance animation has moved it", async () => {
+    const card = (left) => ({ left, top: 100, right: left + 352, bottom: 280 });
     const { toast } = await mountToast();
-    toast.find(".toast").element.getBoundingClientRect = () => ({
-      left: 28,
-      top: 100,
-      right: 380,
-      bottom: 280,
+    const cardElement = toast.find(".toast").element;
+    expect(invoke).toHaveBeenCalledWith("set_toast_card_bounds", {
+      bounds: { left: 0, top: 0, right: 0, bottom: 0 },
     });
-    await flushPromises();
-    expect(appWindow.setIgnoreCursorEvents).toHaveBeenLastCalledWith(true);
 
-    // (1400, 900) physical is (200, 200) in the window: on the card.
-    cursorPosition.mockResolvedValue({ x: 1400, y: 900 });
-    await vi.advanceTimersByTimeAsync(50);
-    expect(appWindow.setIgnoreCursorEvents).toHaveBeenLastCalledWith(false);
+    cardElement.getBoundingClientRect = () => card(28);
+    await toast.find(".toast").trigger("animationend");
 
-    cursorPosition.mockResolvedValue({ x: 1010, y: 510 });
-    await vi.advanceTimersByTimeAsync(50);
-    expect(appWindow.setIgnoreCursorEvents).toHaveBeenLastCalledWith(true);
+    expect(invoke).toHaveBeenLastCalledWith("set_toast_card_bounds", { bounds: card(28) });
+    toast.unmount();
+  });
+
+  it("ignores animations that end on the card's children", async () => {
+    const { toast } = await mountToast();
+    invoke.mockClear();
+
+    await toast.find(".toast__body").trigger("animationend");
+
+    expect(invoke).not.toHaveBeenCalledWith("set_toast_card_bounds", expect.anything());
+    toast.unmount();
+  });
+
+  it("logs, rather than throws, when Rust rejects the card bounds", async () => {
+    invoke.mockRejectedValue(new Error("window gone"));
+    const { toast } = await mountToast();
+
+    expect(console.error).toHaveBeenCalledWith(
+      "[pausetta] could not report the toast's bounds",
+      expect.any(Error),
+    );
     toast.unmount();
   });
 

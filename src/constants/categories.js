@@ -1,44 +1,63 @@
-// Copy is kept calm and non-absolute, per science-research.md: these are sensible habits,
-// not proven medical interventions.
+import { EYE_COUNTDOWN_SECONDS } from "./eye.js";
+import EyeCue from "../components/categories/EyeCue.vue";
+import EyeIcon from "../components/categories/EyeIcon.vue";
+import HydrationCue from "../components/categories/HydrationCue.vue";
+import HydrationIcon from "../components/categories/HydrationIcon.vue";
+import MovementCue from "../components/categories/MovementCue.vue";
+import MovementIcon from "../components/categories/MovementIcon.vue";
+import PostureCue from "../components/categories/PostureCue.vue";
+import PostureIcon from "../components/categories/PostureIcon.vue";
+
+// A new category is one entry here, plus its icon and cue components and an onboarding slide.
 export const CATEGORIES = [
   {
     key: "eye",
+    icon: EyeIcon,
     label: "Eye care",
     description: "20-20-20 rule — look 20 feet away for 20 seconds.",
     toast: {
       body: "Look 20 feet away for 20 seconds.",
       cue: "Blink slowly and let your eyes soften while it runs",
+      cueVisual: EyeCue,
+      // Outlasts the cue ring's countdown.
+      autoDismissMs: (EYE_COUNTDOWN_SECONDS + 2) * 1000,
       action: "Done",
     },
   },
   {
     key: "posture",
+    icon: PostureIcon,
     label: "Posture check",
     description: "A quick nudge to notice your position and shift it.",
     toast: {
       body: "Notice your position and shift it.",
       // ANSI/HFES 100 puts the monitor slightly below eye level, not at it.
       cue: "Ears over shoulders, shoulders relaxed, screen just below eye level",
+      cueVisual: PostureCue,
       action: "Posture reset",
     },
   },
   {
     key: "movement",
+    icon: MovementIcon,
     label: "Movement break",
     description: "Stand up and move for a minute or two.",
     toast: {
       body: "Stand up and move for a minute or two.",
       cue: "90 seconds on your feet — walk, roll your shoulders, stretch",
+      cueVisual: MovementCue,
       action: "I'm up",
     },
   },
   {
     key: "hydration",
+    icon: HydrationIcon,
     label: "Hydration",
     description: "A reminder to drink some water.",
     toast: {
       body: "Time to drink some water.",
       cue: "One glass, about 250 ml",
+      cueVisual: HydrationCue,
       action: "Done",
     },
   },
@@ -51,9 +70,12 @@ export const CATEGORY_BY_KEY = Object.fromEntries(
 const minuteOptions = (minutesList) =>
   minutesList.map((minutes) => ({ value: minutes, label: `${minutes} min` }));
 
-// Must match INTERVAL_OPTIONS_MINUTES / IDLE_OPTIONS_MINUTES in src-tauri/src/settings/model.rs.
-export const INTERVAL_OPTIONS = minuteOptions([15, 20, 30, 45, 60]);
-export const IDLE_OPTIONS = minuteOptions([3, 5, 10, 15, 30]);
+// Rust owns these numbers and injects them into every window it creates (window_script.rs),
+// so the frontend can't offer a value `Settings::validate` rejects.
+const { intervalMinutes, idleMinutes, snoozeMinutes } = window.__PAUSETTA_OPTIONS__;
+export const INTERVAL_OPTIONS = minuteOptions(intervalMinutes);
+export const IDLE_OPTIONS = minuteOptions(idleMinutes);
+export const SNOOZE_MINUTES = snoozeMinutes;
 
 function formatTwelveHour(hour, minute) {
   const period = hour < 12 ? "AM" : "PM";

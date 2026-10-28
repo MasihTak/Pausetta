@@ -1,10 +1,12 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import UiIcon from "./UiIcon.vue";
 import { useSettingsStore } from "../stores/settings.js";
 
 const store = useSettingsStore();
 const isMenuOpen = ref(false);
 const menuElement = useTemplateRef("menu");
+const triggerElement = useTemplateRef("trigger");
 
 // Display-only clock for the "time left" label; scheduling itself lives in Rust.
 const now = ref(Date.now());
@@ -45,21 +47,27 @@ async function openMenu() {
   menuElement.value?.querySelector("button")?.focus();
 }
 
+// The open menu holds focus, so closing it must hand focus back or it falls to the page top.
+function closeMenu() {
+  isMenuOpen.value = false;
+  triggerElement.value?.focus();
+}
+
 function toggleMenu() {
   if (isMenuOpen.value) {
-    isMenuOpen.value = false;
+    closeMenu();
     return;
   }
   openMenu();
 }
 
 function choose(action) {
-  isMenuOpen.value = false;
+  closeMenu();
   action();
 }
 
 function closeOnEscape(event) {
-  if (event.key === "Escape") isMenuOpen.value = false;
+  if (event.key === "Escape" && isMenuOpen.value) closeMenu();
 }
 
 onMounted(() => {
@@ -76,65 +84,33 @@ onUnmounted(() => {
 <template>
   <div class="pause">
     <button
+      ref="trigger"
       type="button"
       class="pause__button"
       :class="{ 'is-paused': isPaused }"
-      aria-haspopup="menu"
       :aria-expanded="isMenuOpen"
       @click="toggleMenu"
     >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        aria-hidden="true"
-      >
-        <line
-          x1="8"
-          y1="5"
-          x2="8"
-          y2="19"
-        />
-        <line
-          x1="16"
-          y1="5"
-          x2="16"
-          y2="19"
-        />
-      </svg>
+      <UiIcon name="pause" />
       <span>{{ buttonLabel }}</span>
-      <svg
-        width="9"
-        height="9"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <polyline points="6 9 12 15 18 9" />
-      </svg>
+      <UiIcon
+        name="chevron-down"
+        :size="9"
+        :stroke-width="2.5"
+      />
     </button>
 
     <template v-if="isMenuOpen">
       <div
         class="pause__backdrop"
-        @click="isMenuOpen = false"
+        @click="closeMenu"
       />
       <div
         ref="menu"
         class="pause__menu"
-        role="menu"
       >
         <button
           type="button"
-          role="menuitem"
           class="pause__item"
           @click="choose(() => store.pause('oneHour'))"
         >
@@ -142,7 +118,6 @@ onUnmounted(() => {
         </button>
         <button
           type="button"
-          role="menuitem"
           class="pause__item"
           @click="choose(() => store.pause('today'))"
         >
@@ -151,7 +126,6 @@ onUnmounted(() => {
         <button
           v-if="isPaused"
           type="button"
-          role="menuitem"
           class="pause__item is-resume"
           @click="choose(store.resume)"
         >

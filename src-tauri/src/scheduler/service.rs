@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
-use chrono::{DateTime, Local, TimeDelta, Timelike, Utc};
+use chrono::{DateTime, Local, TimeDelta, Utc};
 
 use super::idle::IdleDetector;
 use crate::settings::model::{CategoryKey, Settings};
@@ -61,18 +61,26 @@ impl<D: IdleDetector> SchedulerService<D> {
 
     /// Pushes one category back by [`SNOOZE_MINUTES`]; its normal interval resumes after.
     pub fn snooze(&self, category: CategoryKey) {
-        self.reschedule_in(category, TimeDelta::minutes(SNOOZE_MINUTES));
+        self.snooze_at(category, Utc::now());
+    }
+
+    fn snooze_at(&self, category: CategoryKey, now: DateTime<Utc>) {
+        self.reschedule_at(category, now + TimeDelta::minutes(SNOOZE_MINUTES));
     }
 
     /// For a reminder that came due but could not be shown: tries again after
     /// [`RETRY_DELAY`] instead of losing the whole cycle.
     pub fn retry_soon(&self, category: CategoryKey) {
-        self.reschedule_in(category, RETRY_DELAY);
+        self.retry_soon_at(category, Utc::now());
     }
 
-    fn reschedule_in(&self, category: CategoryKey, delay: TimeDelta) {
+    fn retry_soon_at(&self, category: CategoryKey, now: DateTime<Utc>) {
+        self.reschedule_at(category, now + RETRY_DELAY);
+    }
+
+    fn reschedule_at(&self, category: CategoryKey, at: DateTime<Utc>) {
         if let Some(trigger) = self.lock().triggers.get_mut(&category) {
-            trigger.at = Utc::now() + delay;
+            trigger.at = at;
         }
     }
 
@@ -167,19 +175,13 @@ fn is_within_quiet_hours(settings: &Settings, now: DateTime<Utc>) -> bool {
         return false;
     }
 
-    let (Some(start), Some(end)) = (
-        minutes_of_day(&quiet_hours.start),
-        minutes_of_day(&quiet_hours.end),
-    ) else {
-        return false;
-    };
+    let (start, end) = (quiet_hours.start, quiet_hours.end);
     // Equal bounds are an empty window, not a silent all-day one.
     if start == end {
         return false;
     }
 
-    let local_now = now.with_timezone(&Local);
-    let current = local_now.hour() * 60 + local_now.minute();
+    let current = now.with_timezone(&Local).time();
     if start < end {
         (start..end).contains(&current)
     } else {
@@ -187,15 +189,12 @@ fn is_within_quiet_hours(settings: &Settings, now: DateTime<Utc>) -> bool {
     }
 }
 
-fn minutes_of_day(value: &str) -> Option<u32> {
-    let (hours, minutes) = value.split_once(':')?;
-    Some(hours.parse::<u32>().ok()? * 60 + minutes.parse::<u32>().ok()?)
-}
-
 #[cfg(test)]
 mod tests {
+    use chrono::TimeZone;
+
     use super::*;
-    use crate::settings::model::{PauseKind, PauseState};
+    use crate::settings::model::{time_of_day, PauseKind, PauseState};
 
     struct NeverIdle;
 
@@ -222,9 +221,10 @@ mod tests {
         settings
     }
 
-    /// The first tick can only ever schedule; it returns the instant it happened.
+    /// The first tick can only ever schedule; it returns the instant it happened. A fixed
+    /// date, so no test depends on the real clock or on a daylight-saving change.
     fn start(scheduler: &TestScheduler, settings: &Settings) -> DateTime<Utc> {
-        let start = Utc::now();
+        let start = Utc.with_ymd_and_hms(2026, 1, 15, 12, 0, 0).unwrap();
         assert_eq!(scheduler.tick_at(start, settings, Duration::ZERO), None);
         start
     }
@@ -259,10 +259,10 @@ mod tests {
     }
 
     fn at_local_hour(hour: u32) -> DateTime<Utc> {
-        Local::now()
-            .with_hour(hour)
-            .and_then(|time| time.with_minute(30))
-            .expect("every hour has a :30")
+        Local
+            .with_ymd_and_hms(2026, 1, 15, hour, 30, 0)
+            .single()
+            .expect("every hour has a :30 on a mid-January day")
             .with_timezone(&Utc)
     }
 
@@ -385,8 +385,8 @@ mod tests {
         let scheduler = scheduler();
         let mut settings = eye_only();
         settings.quiet_hours.enabled = true;
-        settings.quiet_hours.start = "00:00".into();
-        settings.quiet_hours.end = "23:30".into();
+        settings.quiet_hours.start = time_of_day(0, 0);
+        settings.quiet_hours.end = time_of_day(23, 30);
 
         let midday = at_local_hour(12);
         assert_eq!(scheduler.tick_at(midday, &settings, Duration::ZERO), None);
@@ -468,11 +468,14 @@ mod tests {
             vec![(20, CategoryKey::Eye)]
         );
 
-        scheduler.snooze(CategoryKey::Eye);
+        let snoozed_at = start + TimeDelta::minutes(21);
+        scheduler.snooze_at(CategoryKey::Eye, snoozed_at);
 
         let snoozed_until = scheduler.lock().triggers[&CategoryKey::Eye].at;
-        let expected = Utc::now() + TimeDelta::minutes(SNOOZE_MINUTES);
-        assert!((snoozed_until - expected).abs() < TimeDelta::seconds(5));
+        assert_eq!(
+            snoozed_until,
+            snoozed_at + TimeDelta::minutes(SNOOZE_MINUTES)
+        );
     }
 
     #[test]
@@ -485,19 +488,19 @@ mod tests {
             vec![(20, CategoryKey::Eye)]
         );
 
-        scheduler.retry_soon(CategoryKey::Eye);
+        let failed_at = start + TimeDelta::minutes(21);
+        scheduler.retry_soon_at(CategoryKey::Eye, failed_at);
 
         let retry_at = scheduler.lock().triggers[&CategoryKey::Eye].at;
-        let expected = Utc::now() + RETRY_DELAY;
-        assert!((retry_at - expected).abs() < TimeDelta::seconds(5));
+        assert_eq!(retry_at, failed_at + RETRY_DELAY);
     }
 
     #[test]
     fn quiet_hours_wrap_past_midnight() {
         let mut settings = Settings::default();
         settings.quiet_hours.enabled = true;
-        settings.quiet_hours.start = "22:00".into();
-        settings.quiet_hours.end = "08:00".into();
+        settings.quiet_hours.start = time_of_day(22, 0);
+        settings.quiet_hours.end = time_of_day(8, 0);
 
         assert!(is_within_quiet_hours(&settings, at_local_hour(23)));
         assert!(is_within_quiet_hours(&settings, at_local_hour(3)));
@@ -509,8 +512,8 @@ mod tests {
     fn quiet_hours_inside_one_day_do_not_wrap() {
         let mut settings = Settings::default();
         settings.quiet_hours.enabled = true;
-        settings.quiet_hours.start = "09:00".into();
-        settings.quiet_hours.end = "17:00".into();
+        settings.quiet_hours.start = time_of_day(9, 0);
+        settings.quiet_hours.end = time_of_day(17, 0);
 
         assert!(is_within_quiet_hours(&settings, at_local_hour(12)));
         assert!(!is_within_quiet_hours(&settings, at_local_hour(8)));

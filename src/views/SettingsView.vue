@@ -1,38 +1,18 @@
 <script setup>
 import CategoryRow from "../components/CategoryRow.vue";
+import SettingRow from "../components/SettingRow.vue";
 import SelectField from "../components/SelectField.vue";
 import ToggleSwitch from "../components/ToggleSwitch.vue";
 import { CATEGORIES, HALF_HOUR_TIME_OPTIONS, IDLE_OPTIONS } from "../constants/categories.js";
 import { useSettingModel } from "../stores/settings.js";
 
-const isQuietHoursEnabled = useSettingModel(
-  (settings) => settings.quietHours.enabled,
-  (settings, enabled) => (settings.quietHours.enabled = enabled),
-);
-const quietHoursStart = useSettingModel(
-  (settings) => settings.quietHours.start,
-  (settings, time) => (settings.quietHours.start = time),
-);
-const quietHoursEnd = useSettingModel(
-  (settings) => settings.quietHours.end,
-  (settings, time) => (settings.quietHours.end = time),
-);
-const isIdlePauseEnabled = useSettingModel(
-  (settings) => settings.idlePause.enabled,
-  (settings, enabled) => (settings.idlePause.enabled = enabled),
-);
-const idleMinutes = useSettingModel(
-  (settings) => settings.idlePause.minutes,
-  (settings, minutes) => (settings.idlePause.minutes = minutes),
-);
-const isLaunchOnLoginEnabled = useSettingModel(
-  (settings) => settings.launchOnLogin,
-  (settings, enabled) => (settings.launchOnLogin = enabled),
-);
-const isSoundEnabled = useSettingModel(
-  (settings) => settings.soundEnabled,
-  (settings, enabled) => (settings.soundEnabled = enabled),
-);
+const isQuietHoursEnabled = useSettingModel("quietHours.enabled");
+const quietHoursStart = useSettingModel("quietHours.start");
+const quietHoursEnd = useSettingModel("quietHours.end");
+const isIdlePauseEnabled = useSettingModel("idlePause.enabled");
+const idleMinutes = useSettingModel("idlePause.minutes");
+const isLaunchOnLoginEnabled = useSettingModel("launchOnLogin");
+const isSoundEnabled = useSettingModel("soundEnabled");
 </script>
 
 <template>
@@ -55,22 +35,17 @@ const isSoundEnabled = useSettingModel(
         General
       </h2>
       <div class="settings-card">
-        <div class="settings-row">
-          <div class="settings-row__head">
-            <span class="settings-row__title">Quiet hours</span>
+        <SettingRow
+          title="Quiet hours"
+          description="Pause reminders automatically during these hours."
+          :is-dimmed="!isQuietHoursEnabled"
+        >
+          <template #control>
             <ToggleSwitch
               v-model="isQuietHoursEnabled"
               label="Quiet hours"
             />
-          </div>
-          <div
-            class="settings-row__detail"
-            :class="{ 'is-dimmed': !isQuietHoursEnabled }"
-          >
-            <span class="settings-row__description">
-              Pause reminders automatically during these hours.
-            </span>
-          </div>
+          </template>
           <div
             class="quiet-hours-range"
             :class="{ 'is-dimmed': !isQuietHoursEnabled }"
@@ -92,63 +67,52 @@ const isSoundEnabled = useSettingModel(
               is-compact
             />
           </div>
-        </div>
+        </SettingRow>
 
-        <div class="settings-row">
-          <div class="settings-row__head">
-            <span class="settings-row__title">Auto-pause when idle</span>
+        <SettingRow
+          title="Auto-pause when idle"
+          description="Pauses reminders when you step away, after"
+          :is-dimmed="!isIdlePauseEnabled"
+        >
+          <template #control>
             <ToggleSwitch
               v-model="isIdlePauseEnabled"
               label="Auto-pause when idle"
             />
-          </div>
-          <div
-            class="settings-row__detail"
-            :class="{ 'is-dimmed': !isIdlePauseEnabled }"
-          >
-            <span class="settings-row__description">Pauses reminders when you step away, after</span>
+          </template>
+          <template #detail>
             <SelectField
               v-model="idleMinutes"
               :options="IDLE_OPTIONS"
               label="Idle time before pausing"
               :disabled="!isIdlePauseEnabled"
             />
-          </div>
-        </div>
+          </template>
+        </SettingRow>
 
-        <div class="settings-row">
-          <div class="settings-row__head">
-            <div class="settings-row__text">
-              <div class="settings-row__title">
-                Launch on login
-              </div>
-              <div class="settings-row__description">
-                Start automatically when you sign in.
-              </div>
-            </div>
+        <SettingRow
+          title="Launch on login"
+          description="Start automatically when you sign in."
+        >
+          <template #control>
             <ToggleSwitch
               v-model="isLaunchOnLoginEnabled"
               label="Launch on login"
             />
-          </div>
-        </div>
+          </template>
+        </SettingRow>
 
-        <div class="settings-row">
-          <div class="settings-row__head">
-            <div class="settings-row__text">
-              <div class="settings-row__title">
-                Notification sound
-              </div>
-              <div class="settings-row__description">
-                Play a sound when a reminder appears.
-              </div>
-            </div>
+        <SettingRow
+          title="Notification sound"
+          description="Play a sound when a reminder appears."
+        >
+          <template #control>
             <ToggleSwitch
               v-model="isSoundEnabled"
               label="Notification sound"
             />
-          </div>
-        </div>
+          </template>
+        </SettingRow>
       </div>
     </section>
   </div>
@@ -179,13 +143,5 @@ h2 {
 .range-label {
   font-size: 11.5px;
   color: var(--text3);
-}
-
-.settings-row__text {
-  flex: 1;
-
-  .settings-row__description {
-    margin-top: 3px;
-  }
 }
 </style>

@@ -4,7 +4,6 @@
   "description": "Capability for the Settings and reminder windows",
   "windows": ["settings", "reminder-*"],
   "permissions": [
-    "core:default",
-    "opener:default"
+    "core:default"
   ]
 }

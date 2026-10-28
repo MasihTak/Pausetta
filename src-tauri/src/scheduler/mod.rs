@@ -24,12 +24,11 @@ pub fn spawn(app: &AppHandle) {
 }
 
 fn tick(app: &AppHandle) {
-    // Re-read settings every tick: microseconds against an in-process database, and it keeps
-    // the scheduler honest about edits made in the UI and about a pause that has just expired.
-    let settings = match app.state::<AppSettingsService>().get() {
+    // Every tick, so edits made in the UI apply at once; this only writes on the tick a pause ends.
+    let settings = match app.state::<AppSettingsService>().expire_pause() {
         Ok(settings) => settings,
         Err(error) => {
-            eprintln!("[pausetta] could not read settings: {error}");
+            log::error!("could not read settings: {error}");
             return;
         }
     };
@@ -40,8 +39,8 @@ fn tick(app: &AppHandle) {
     };
 
     if let Err(error) = reminder_window::show(app, category) {
-        eprintln!(
-            "[pausetta] could not show the {} reminder, retrying soon: {error}",
+        log::error!(
+            "could not show the {} reminder, retrying soon: {error}",
             category.as_str()
         );
         // The tick already moved this category a full interval ahead.

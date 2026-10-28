@@ -1,6 +1,25 @@
 use tauri::AppHandle;
 use tauri_plugin_autostart::ManagerExt;
 
+/// Reader interface for the OS login item, so the settings rule around it can be tested
+/// without a real desktop session.
+pub trait LoginItem {
+    fn is_disabled_by_user(&self) -> bool;
+    fn apply(&self, launch_on_login: bool) -> Result<(), String>;
+}
+
+pub struct SystemLoginItem<'a>(pub &'a AppHandle);
+
+impl LoginItem for SystemLoginItem<'_> {
+    fn is_disabled_by_user(&self) -> bool {
+        is_disabled_in_startup_apps(self.0)
+    }
+
+    fn apply(&self, launch_on_login: bool) -> Result<(), String> {
+        apply(self.0, launch_on_login)
+    }
+}
+
 /// Brings the OS login item in line with the persisted setting.
 ///
 /// Called at startup as well as on change, so a login item removed outside the app — or

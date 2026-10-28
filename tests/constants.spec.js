@@ -5,6 +5,7 @@ import {
   HALF_HOUR_TIME_OPTIONS,
   IDLE_OPTIONS,
   INTERVAL_OPTIONS,
+  SNOOZE_MINUTES,
 } from "../src/constants/categories.js";
 import { ONBOARDING_SLIDES } from "../src/constants/onboarding.js";
 
@@ -30,14 +31,19 @@ describe("categories", () => {
     }
   });
 
+  it("gives every category its icon and toast cue, so none renders blank", () => {
+    for (const category of CATEGORIES) {
+      expect(category.icon, `${category.key} icon`).toBeTruthy();
+      expect(category.toast.cueVisual, `${category.key} cue`).toBeTruthy();
+    }
+  });
+
   it("indexes categories by key", () => {
     expect(Object.keys(CATEGORY_BY_KEY)).toHaveLength(CATEGORIES.length);
     expect(CATEGORY_BY_KEY.eye).toBe(CATEGORIES[0]);
   });
 
-  // These must stay in step with INTERVAL_OPTIONS_MINUTES / IDLE_OPTIONS_MINUTES in Rust,
-  // or the frontend can offer a value `Settings::validate` rejects.
-  it("offers the same interval and idle minutes as the Rust model", () => {
+  it("builds its options from the numbers Rust injects", () => {
     expect(INTERVAL_OPTIONS).toEqual([
       { value: 15, label: "15 min" },
       { value: 20, label: "20 min" },
@@ -46,6 +52,7 @@ describe("categories", () => {
       { value: 60, label: "60 min" },
     ]);
     expect(IDLE_OPTIONS.map((option) => option.value)).toEqual([3, 5, 10, 15, 30]);
+    expect(SNOOZE_MINUTES).toBe(10);
   });
 });
 
@@ -76,7 +83,12 @@ describe("onboarding slides", () => {
     ]);
   });
 
-  // science-research.md asks for the caveat on every evidence claim; only the welcome is exempt.
+  it("gives every slide a scene", () => {
+    for (const slide of ONBOARDING_SLIDES) {
+      expect(slide.scene, `${slide.key} scene`).toBeTruthy();
+    }
+  });
+
   it("carries an evidence note on every category slide", () => {
     for (const slide of ONBOARDING_SLIDES.slice(1)) {
       expect(slide.note).toBeTruthy();

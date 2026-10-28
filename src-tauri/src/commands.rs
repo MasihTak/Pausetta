@@ -1,9 +1,10 @@
 use tauri::{AppHandle, State, WebviewWindow};
 
-use crate::autostart;
-use crate::reminder_window;
+use crate::autostart::SystemLoginItem;
+use crate::reminder_window::{self, CardBounds, ToastStack};
 use crate::scheduler::idle::SystemIdleDetector;
 use crate::scheduler::service::SchedulerService;
+use crate::settings::error::SettingsError;
 use crate::settings::model::{CategoryKey, PauseKind, Settings};
 use crate::settings::repository::SqliteSettingsRepository;
 use crate::settings::service::SettingsService;
@@ -12,7 +13,7 @@ pub type AppSettingsService = SettingsService<SqliteSettingsRepository>;
 pub type AppSchedulerService = SchedulerService<SystemIdleDetector>;
 
 #[tauri::command]
-pub fn get_settings(service: State<'_, AppSettingsService>) -> Result<Settings, String> {
+pub fn get_settings(service: State<'_, AppSettingsService>) -> Settings {
     service.get()
 }
 
@@ -20,42 +21,37 @@ pub fn get_settings(service: State<'_, AppSettingsService>) -> Result<Settings, 
 pub fn update_settings(
     app: AppHandle,
     service: State<'_, AppSettingsService>,
-    mut settings: Settings,
-) -> Result<Settings, String> {
-    // OS first: if it refuses the login item, nothing is saved.
-    settings.validate()?;
-    // Switching the toggle on is a fresh request; an unrelated save must not undo a
-    // Startup apps "Disabled".
-    let was_launching_on_login = service.get()?.launch_on_login;
-    if was_launching_on_login && autostart::is_disabled_in_startup_apps(&app) {
-        settings.launch_on_login = false;
-    }
-    autostart::apply(&app, settings.launch_on_login)?;
-    service.update(settings)
+    settings: Settings,
+) -> Result<Settings, SettingsError> {
+    service.update(settings, &SystemLoginItem(&app))
 }
 
 #[tauri::command]
 pub fn pause_reminders(
     service: State<'_, AppSettingsService>,
     kind: PauseKind,
-) -> Result<Settings, String> {
+) -> Result<Settings, SettingsError> {
     service.pause(kind)
 }
 
 #[tauri::command]
-pub fn resume_reminders(service: State<'_, AppSettingsService>) -> Result<Settings, String> {
+pub fn resume_reminders(service: State<'_, AppSettingsService>) -> Result<Settings, SettingsError> {
     service.resume()
 }
 
 // Window commands are async: creating a window from a sync command deadlocks on Windows.
 #[tauri::command]
-pub async fn show_reminder(app: AppHandle, category: CategoryKey) -> Result<(), String> {
-    reminder_window::show(&app, category).map_err(|error| error.to_string())
+pub async fn close_reminder(window: WebviewWindow) -> Result<(), String> {
+    reminder_window::close(&window).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub async fn close_reminder(window: WebviewWindow) -> Result<(), String> {
-    reminder_window::close(&window).map_err(|error| error.to_string())
+pub fn set_toast_card_bounds(
+    window: WebviewWindow,
+    stack: State<'_, ToastStack>,
+    bounds: CardBounds,
+) {
+    stack.set_card(window.label(), bounds);
 }
 
 #[tauri::command]

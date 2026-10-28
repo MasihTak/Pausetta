@@ -14,7 +14,8 @@ const RESUME_ID: &str = "resume";
 const QUIT_ID: &str = "quit";
 
 /// Emitted after the tray changes settings, so an already-open Settings window re-reads
-/// them instead of showing a stale pause state.
+/// them instead of showing a stale pause state. The frontend listens for this by name in
+/// src/App.vue; change both together.
 pub const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -81,16 +82,17 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
     };
 
     if let Err(error) = result {
-        eprintln!("[pausetta] tray action '{}' failed: {error}", event.id().0);
+        log::error!("tray action '{}' failed: {error}", event.id().0);
     }
 }
 
 fn change_pause(app: &AppHandle, kind: Option<PauseKind>) -> Result<(), String> {
     let service = app.state::<AppSettingsService>();
     match kind {
-        Some(kind) => service.pause(kind)?,
-        None => service.resume()?,
-    };
+        Some(kind) => service.pause(kind),
+        None => service.resume(),
+    }
+    .map_err(|error| error.to_string())?;
     app.emit(SETTINGS_CHANGED_EVENT, ())
         .map_err(|error| error.to_string())
 }

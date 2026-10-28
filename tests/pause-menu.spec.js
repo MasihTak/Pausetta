@@ -87,7 +87,7 @@ describe("PauseMenu menu", () => {
   it("stays closed until asked", async () => {
     const { menu } = await mountMenu();
 
-    expect(menu.find('[role="menu"]').exists()).toBe(false);
+    expect(menu.find('.pause__menu').exists()).toBe(false);
     expect(menu.find(".pause__button").attributes("aria-expanded")).toBe("false");
   });
 
@@ -97,7 +97,7 @@ describe("PauseMenu menu", () => {
     await menu.find(".pause__button").trigger("click");
     await menu.vm.$nextTick();
 
-    expect(menu.find('[role="menu"]').exists()).toBe(true);
+    expect(menu.find('.pause__menu').exists()).toBe(true);
     expect(menu.find(".pause__button").attributes("aria-expanded")).toBe("true");
     expect(document.activeElement.textContent).toContain("Pause for 1 hour");
     menu.unmount();
@@ -109,7 +109,7 @@ describe("PauseMenu menu", () => {
     await menu.find(".pause__button").trigger("click");
     await menu.find(".pause__button").trigger("click");
 
-    expect(menu.find('[role="menu"]').exists()).toBe(false);
+    expect(menu.find('.pause__menu').exists()).toBe(false);
   });
 
   it("closes on a backdrop click", async () => {
@@ -118,7 +118,7 @@ describe("PauseMenu menu", () => {
     await menu.find(".pause__button").trigger("click");
     await menu.find(".pause__backdrop").trigger("click");
 
-    expect(menu.find('[role="menu"]').exists()).toBe(false);
+    expect(menu.find('.pause__menu').exists()).toBe(false);
   });
 
   it("closes on Escape", async () => {
@@ -128,7 +128,7 @@ describe("PauseMenu menu", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await menu.vm.$nextTick();
 
-    expect(menu.find('[role="menu"]').exists()).toBe(false);
+    expect(menu.find('.pause__menu').exists()).toBe(false);
   });
 
   it("ignores other keys", async () => {
@@ -138,14 +138,59 @@ describe("PauseMenu menu", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
     await menu.vm.$nextTick();
 
-    expect(menu.find('[role="menu"]').exists()).toBe(true);
+    expect(menu.find('.pause__menu').exists()).toBe(true);
+  });
+
+  it("hands focus back to the button when Escape closes the menu", async () => {
+    const { menu } = await mountMenu();
+    await menu.find(".pause__button").trigger("click");
+    await menu.vm.$nextTick();
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await menu.vm.$nextTick();
+
+    expect(document.activeElement).toBe(menu.find(".pause__button").element);
+    menu.unmount();
+  });
+
+  it("hands focus back to the button after a choice", async () => {
+    const { menu } = await mountMenu();
+    await menu.find(".pause__button").trigger("click");
+    await menu.vm.$nextTick();
+
+    invoke.mockResolvedValueOnce(makeSettings());
+    await menu.find(".pause__item").trigger("click");
+
+    expect(document.activeElement).toBe(menu.find(".pause__button").element);
+    menu.unmount();
+  });
+
+  it("leaves focus alone when Escape is pressed with the menu closed", async () => {
+    const { menu } = await mountMenu();
+    const other = document.createElement("input");
+    document.body.append(other);
+    other.focus();
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    expect(document.activeElement).toBe(other);
+    other.remove();
+    menu.unmount();
+  });
+
+  it("does not promise the arrow-key behaviour of an ARIA menu", async () => {
+    const { menu } = await mountMenu();
+    await menu.find(".pause__button").trigger("click");
+
+    expect(menu.find("[role]").exists()).toBe(false);
+    expect(menu.find(".pause__button").attributes("aria-haspopup")).toBeUndefined();
   });
 
   it("offers no Resume while reminders are running", async () => {
     const { menu } = await mountMenu();
     await menu.find(".pause__button").trigger("click");
 
-    expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+    expect(menu.findAll('.pause__item').map((item) => item.text())).toEqual([
       "Pause for 1 hour",
       "Pause for today",
     ]);
@@ -159,10 +204,10 @@ describe("PauseMenu menu", () => {
     await menu.find(".pause__button").trigger("click");
 
     invoke.mockResolvedValueOnce(makeSettings());
-    await menu.findAll('[role="menuitem"]')[index].trigger("click");
+    await menu.findAll('.pause__item')[index].trigger("click");
 
     expect(invoke).toHaveBeenLastCalledWith("pause_reminders", { kind });
-    expect(menu.find('[role="menu"]').exists()).toBe(false);
+    expect(menu.find('.pause__menu').exists()).toBe(false);
   });
 
   it("offers Resume once paused, and sends it to Rust", async () => {
@@ -170,7 +215,7 @@ describe("PauseMenu menu", () => {
     const { menu } = await mountMenu({ kind: "today", until: minutesFromNow(600) });
     await menu.find(".pause__button").trigger("click");
 
-    const resume = menu.findAll('[role="menuitem"]').at(-1);
+    const resume = menu.findAll('.pause__item').at(-1);
     expect(resume.text()).toBe("Resume");
 
     invoke.mockResolvedValueOnce(makeSettings());

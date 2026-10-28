@@ -1,10 +1,10 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { cursorPosition, getCurrentWindow } from "@tauri-apps/api/window";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
-import { CATEGORY_BY_KEY } from "../constants/categories.js";
+import UiIcon from "./UiIcon.vue";
+import { CATEGORY_BY_KEY, SNOOZE_MINUTES } from "../constants/categories.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 const store = useSettingsStore();
@@ -13,10 +13,7 @@ const categoryKey = window.__PAUSETTA_REMINDER_CATEGORY__;
 // Set by Rust in reminder_window.rs, from the same platform check that positions the window.
 const isTopAnchored = window.__PAUSETTA_REMINDER_ANCHOR__ === "top";
 
-const AUTO_DISMISS_MS = 14_000;
-// Outlasts the eye cue's 20s ring.
-const EYE_AUTO_DISMISS_MS = 22_000;
-const CURSOR_CHECK_MS = 50;
+const DEFAULT_AUTO_DISMISS_MS = 14_000;
 
 const card = ref(null);
 
@@ -24,12 +21,12 @@ const category = CATEGORY_BY_KEY[categoryKey];
 const intervalMinutes = computed(
   () => store.settings?.categories[categoryKey].intervalMinutes,
 );
-const autoDismissMs = categoryKey === "eye" ? EYE_AUTO_DISMISS_MS : AUTO_DISMISS_MS;
+const autoDismissMs = category.toast.autoDismissMs ?? DEFAULT_AUTO_DISMISS_MS;
 
 let dismissTimer;
 let dismissDeadline;
+// Only meaningful between a pause (mouseenter) and the resume (mouseleave) that reads it.
 let remainingMs;
-let isTrackingCursor = true;
 
 function startDismissTimer(durationMs) {
   clearTimeout(dismissTimer);
@@ -47,48 +44,24 @@ function resumeDismissTimer() {
   startDismissTimer(remainingMs);
 }
 
-function isCursorOverCard(cursor, windowPosition, scaleFactor) {
-  const bounds = card.value?.getBoundingClientRect();
-  if (!bounds) return false;
-  const x = (cursor.x - windowPosition.x) / scaleFactor;
-  const y = (cursor.y - windowPosition.y) / scaleFactor;
-  return x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// The window is larger than the card to fit its glow. That invisible margin must not
-// swallow clicks meant for the apps underneath, and a click-through window receives no
-// mouse events, so the cursor is polled to switch click-through off over the card.
-async function letClicksThroughOutsideCard() {
-  const appWindow = getCurrentWindow();
-  const [windowPosition, scaleFactor] = await Promise.all([
-    appWindow.innerPosition(),
-    appWindow.scaleFactor(),
-  ]);
-  let isIgnoringCursor;
-  while (isTrackingCursor) {
-    const cursor = await cursorPosition();
-    const shouldIgnoreCursor = !isCursorOverCard(cursor, windowPosition, scaleFactor);
-    if (shouldIgnoreCursor !== isIgnoringCursor) {
-      await appWindow.setIgnoreCursorEvents(shouldIgnoreCursor);
-      isIgnoringCursor = shouldIgnoreCursor;
-    }
-    await sleep(CURSOR_CHECK_MS);
-  }
+// The window is larger than the card to fit its glow. Rust makes that invisible margin
+// click-through, so it needs to know where the card is.
+function reportCardBounds() {
+  const { left, top, right, bottom } = card.value.getBoundingClientRect();
+  invoke("set_toast_card_bounds", { bounds: { left, top, right, bottom } }).catch((error) =>
+    console.error("[pausetta] could not report the toast's bounds", error),
+  );
 }
 
 onMounted(() => {
   store.load().catch((error) => console.error("[pausetta] could not load settings", error));
   // An unattended reminder closes itself rather than waiting on the desk all afternoon.
   startDismissTimer(autoDismissMs);
-  letClicksThroughOutsideCard().catch((error) =>
-    console.error("[pausetta] could not make the toast's margin click-through", error),
-  );
+  // Again once the entrance animation ends: it moves the card, and Rust keeps the last report.
+  reportCardBounds();
 });
 
 onUnmounted(() => {
-  isTrackingCursor = false;
   clearTimeout(dismissTimer);
 });
 
@@ -113,7 +86,7 @@ function snooze() {
       ref="card"
       class="toast"
       :style="{ '--cat': `var(--cat-${categoryKey})` }"
-      aria-live="polite"
+      @animationend.self="reportCardBounds"
       @mouseenter="pauseDismissTimer"
       @mouseleave="resumeDismissTimer"
     >
@@ -136,29 +109,11 @@ function snooze() {
             aria-label="Close reminder"
             @click="dismiss"
           >
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 10 10"
-              aria-hidden="true"
-            >
-              <line
-                x1="0"
-                y1="0"
-                x2="10"
-                y2="10"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <line
-                x1="10"
-                y1="0"
-                x2="0"
-                y2="10"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-            </svg>
+            <UiIcon
+              name="close"
+              :size="9"
+              :stroke-width="2.4"
+            />
           </button>
         </header>
 
@@ -181,58 +136,7 @@ function snooze() {
             </p>
 
             <div class="toast__cue">
-              <div
-                v-if="categoryKey === 'eye'"
-                class="cue-ring"
-              >
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 30 30"
-                  aria-hidden="true"
-                >
-                  <circle
-                    cx="15"
-                    cy="15"
-                    r="13"
-                    class="cue-ring__track"
-                  />
-                  <circle
-                    cx="15"
-                    cy="15"
-                    r="13"
-                    class="cue-ring__progress"
-                  />
-                </svg>
-                <span class="cue-ring__label">20s</span>
-              </div>
-              <div
-                v-else-if="categoryKey === 'posture'"
-                class="cue-posture"
-                aria-hidden="true"
-              >
-                <span style="width: 16px" />
-                <span style="width: 11px; opacity: 0.75" />
-                <span style="width: 20px; opacity: 0.5" />
-              </div>
-              <div
-                v-else-if="categoryKey === 'movement'"
-                class="cue-bars"
-                aria-hidden="true"
-              >
-                <span
-                  v-for="barIndex in 4"
-                  :key="barIndex"
-                  :style="{ animationDelay: `${(barIndex - 1) * 150}ms` }"
-                />
-              </div>
-              <div
-                v-else-if="categoryKey === 'hydration'"
-                class="cue-glass"
-                aria-hidden="true"
-              >
-                <span />
-              </div>
+              <component :is="category.toast.cueVisual" />
               <span class="toast__cue-text">{{ category.toast.cue }}</span>
             </div>
 
@@ -249,7 +153,7 @@ function snooze() {
                 class="toast__ghost"
                 @click="snooze"
               >
-                Snooze 10 min
+                Snooze {{ SNOOZE_MINUTES }} min
               </button>
             </div>
           </div>
@@ -454,101 +358,6 @@ function snooze() {
   text-wrap: pretty;
 }
 
-.cue-ring {
-  position: relative;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-
-  svg {
-    transform: rotate(-90deg);
-  }
-}
-
-.cue-ring__track,
-.cue-ring__progress {
-  fill: none;
-  stroke-width: 3;
-}
-
-.cue-ring__track {
-  stroke: color-mix(in srgb, var(--cat) 24%, var(--card));
-}
-
-.cue-ring__progress {
-  stroke: var(--cat-ink);
-  stroke-linecap: round;
-  stroke-dasharray: 82;
-  animation: cue-ring 20s linear forwards;
-}
-
-.cue-ring__label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8.5px;
-  font-weight: 700;
-  color: var(--cat-ink);
-}
-
-.cue-posture {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
-  width: 26px;
-
-  span {
-    height: 3px;
-    border-radius: 2px;
-    background: var(--cat-ink);
-  }
-}
-
-.cue-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  flex-shrink: 0;
-  width: 26px;
-  height: 22px;
-
-  span {
-    width: 4px;
-    height: 22px;
-    border-radius: 2px;
-    background: var(--cat-ink);
-    transform-origin: bottom;
-    animation: cue-bar 900ms ease-in-out infinite;
-  }
-}
-
-.cue-glass {
-  position: relative;
-  flex-shrink: 0;
-  width: 18px;
-  height: 24px;
-  margin: 0 4px;
-  overflow: hidden;
-  border: 2px solid var(--cat-ink);
-  border-top: none;
-  border-radius: 2px 2px 7px 7px;
-
-  span {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 80%;
-    background: var(--cat-ink);
-    opacity: 0.85;
-    animation: cue-fill 2.4s ease-in-out infinite alternate;
-  }
-}
-
 .toast__actions {
   display: flex;
   align-items: center;
@@ -590,7 +399,8 @@ function snooze() {
   width: 100%;
   height: 100%;
   background: var(--cat);
-  animation: progress-sweep 14s linear reverse forwards;
+  // The duration is bound inline to the same value as the dismiss timer.
+  animation: progress-sweep linear reverse forwards;
 
   .toast:hover & {
     animation-play-state: paused;
@@ -640,34 +450,6 @@ function snooze() {
   from {
     opacity: 0;
     transform: translateY(-14px) scale(0.97);
-  }
-}
-
-@keyframes cue-ring {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: 82;
-  }
-}
-
-@keyframes cue-bar {
-  0%,
-  100% {
-    transform: scaleY(0.3);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes cue-fill {
-  0% {
-    height: 24%;
-  }
-  100% {
-    height: 82%;
   }
 }
 
