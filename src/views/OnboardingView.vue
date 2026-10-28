@@ -57,7 +57,7 @@ function goBack() {
           <div class="slide__stage">
             <div class="slide__glow" />
             <OnboardingScene
-              :category="slide.key"
+              :scene="slide.scene"
               class="slide__scene"
             />
           </div>

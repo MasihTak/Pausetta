@@ -1,42 +1,62 @@
+import EyeCue from "../components/categories/EyeCue.vue";
+import EyeIcon from "../components/categories/EyeIcon.vue";
+import HydrationCue from "../components/categories/HydrationCue.vue";
+import HydrationIcon from "../components/categories/HydrationIcon.vue";
+import MovementCue from "../components/categories/MovementCue.vue";
+import MovementIcon from "../components/categories/MovementIcon.vue";
+import PostureCue from "../components/categories/PostureCue.vue";
+import PostureIcon from "../components/categories/PostureIcon.vue";
+
+// A new category is one entry here, plus its icon and cue components and an onboarding slide.
 export const CATEGORIES = [
   {
     key: "eye",
+    icon: EyeIcon,
     label: "Eye care",
     description: "20-20-20 rule — look 20 feet away for 20 seconds.",
     toast: {
       body: "Look 20 feet away for 20 seconds.",
       cue: "Blink slowly and let your eyes soften while it runs",
+      cueVisual: EyeCue,
+      // Outlasts the cue ring's 20s.
+      autoDismissMs: 22_000,
       action: "Done",
     },
   },
   {
     key: "posture",
+    icon: PostureIcon,
     label: "Posture check",
     description: "A quick nudge to notice your position and shift it.",
     toast: {
       body: "Notice your position and shift it.",
       // ANSI/HFES 100 puts the monitor slightly below eye level, not at it.
       cue: "Ears over shoulders, shoulders relaxed, screen just below eye level",
+      cueVisual: PostureCue,
       action: "Posture reset",
     },
   },
   {
     key: "movement",
+    icon: MovementIcon,
     label: "Movement break",
     description: "Stand up and move for a minute or two.",
     toast: {
       body: "Stand up and move for a minute or two.",
       cue: "90 seconds on your feet — walk, roll your shoulders, stretch",
+      cueVisual: MovementCue,
       action: "I'm up",
     },
   },
   {
     key: "hydration",
+    icon: HydrationIcon,
     label: "Hydration",
     description: "A reminder to drink some water.",
     toast: {
       body: "Time to drink some water.",
       cue: "One glass, about 250 ml",
+      cueVisual: HydrationCue,
       action: "Done",
     },
   },
