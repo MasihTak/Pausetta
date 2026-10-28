@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.2](https://github.com/MasihTak/Pausetta/compare/v0.2.1...v0.2.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* log errors to a file and show a dialog when startup fails ([dc83b78](https://github.com/MasihTak/Pausetta/commit/dc83b78978e80248d3dc6079b324aa0dc63ad784))
+* log errors to a file and show a dialog when startup fails ([d8a0dbd](https://github.com/MasihTak/Pausetta/commit/d8a0dbd516a34dd81fbdb62458d7a4a55a7f86e2)), closes [#18](https://github.com/MasihTak/Pausetta/issues/18)
+* show onboarding save errors and move the login-item rule into the service ([b0ff6f5](https://github.com/MasihTak/Pausetta/commit/b0ff6f570e881a772c5c81fe6a40645a737ca81e))
+* show onboarding save errors and move the login-item rule into the service ([ec68049](https://github.com/MasihTak/Pausetta/commit/ec6804919aba5ae17194fe2e409d313e4611da02)), closes [#22](https://github.com/MasihTak/Pausetta/issues/22)
+
 ## [0.2.1](https://github.com/MasihTak/Pausetta/compare/v0.2.0...v0.2.1) (2026-10-07)
 
 
