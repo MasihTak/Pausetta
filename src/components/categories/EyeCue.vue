@@ -1,5 +1,12 @@
+<script setup>
+import { EYE_COUNTDOWN_SECONDS } from "../../constants/eye.js";
+</script>
+
 <template>
-  <div class="cue-ring">
+  <div
+    class="cue-ring"
+    :style="{ '--eye-countdown': `${EYE_COUNTDOWN_SECONDS}s` }"
+  >
     <svg
       width="26"
       height="26"
@@ -16,10 +23,11 @@
         cx="15"
         cy="15"
         r="13"
+        pathLength="1"
         class="cue-ring__progress"
       />
     </svg>
-    <span class="cue-ring__label">20s</span>
+    <span class="cue-ring__label">{{ EYE_COUNTDOWN_SECONDS }}s</span>
   </div>
 </template>
 
@@ -48,8 +56,9 @@
 .cue-ring__progress {
   stroke: var(--cat-ink);
   stroke-linecap: round;
-  stroke-dasharray: 82;
-  animation: cue-ring 20s linear forwards;
+  // pathLength="1" on the circle makes the dash length independent of the radius.
+  stroke-dasharray: 1;
+  animation: cue-ring var(--eye-countdown) linear forwards;
 }
 
 .cue-ring__label {
@@ -68,7 +77,7 @@
     stroke-dashoffset: 0;
   }
   to {
-    stroke-dashoffset: 82;
+    stroke-dashoffset: 1;
   }
 }
 </style>

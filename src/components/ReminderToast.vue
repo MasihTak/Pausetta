@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
+import UiIcon from "./UiIcon.vue";
 import { CATEGORY_BY_KEY, SNOOZE_MINUTES } from "../constants/categories.js";
 import { useSettingsStore } from "../stores/settings.js";
 
@@ -24,6 +25,7 @@ const autoDismissMs = category.toast.autoDismissMs ?? DEFAULT_AUTO_DISMISS_MS;
 
 let dismissTimer;
 let dismissDeadline;
+// Only meaningful between a pause (mouseenter) and the resume (mouseleave) that reads it.
 let remainingMs;
 
 function startDismissTimer(durationMs) {
@@ -107,29 +109,11 @@ function snooze() {
             aria-label="Close reminder"
             @click="dismiss"
           >
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 10 10"
-              aria-hidden="true"
-            >
-              <line
-                x1="0"
-                y1="0"
-                x2="10"
-                y2="10"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <line
-                x1="10"
-                y1="0"
-                x2="0"
-                y2="10"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-            </svg>
+            <UiIcon
+              name="close"
+              :size="9"
+              :stroke-width="2.4"
+            />
           </button>
         </header>
 
@@ -415,7 +399,8 @@ function snooze() {
   width: 100%;
   height: 100%;
   background: var(--cat);
-  animation: progress-sweep 14s linear reverse forwards;
+  // The duration is bound inline to the same value as the dismiss timer.
+  animation: progress-sweep linear reverse forwards;
 
   .toast:hover & {
     animation-play-state: paused;

@@ -1,3 +1,4 @@
+import { EYE_COUNTDOWN_SECONDS } from "./eye.js";
 import EyeCue from "../components/categories/EyeCue.vue";
 import EyeIcon from "../components/categories/EyeIcon.vue";
 import HydrationCue from "../components/categories/HydrationCue.vue";
@@ -18,8 +19,8 @@ export const CATEGORIES = [
       body: "Look 20 feet away for 20 seconds.",
       cue: "Blink slowly and let your eyes soften while it runs",
       cueVisual: EyeCue,
-      // Outlasts the cue ring's 20s.
-      autoDismissMs: 22_000,
+      // Outlasts the cue ring's countdown.
+      autoDismissMs: (EYE_COUNTDOWN_SECONDS + 2) * 1000,
       action: "Done",
     },
   },

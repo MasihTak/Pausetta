@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import UiIcon from "./UiIcon.vue";
 import { useSettingsStore } from "../stores/settings.js";
 
 const store = useSettingsStore();
@@ -90,43 +91,13 @@ onUnmounted(() => {
       :aria-expanded="isMenuOpen"
       @click="toggleMenu"
     >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        aria-hidden="true"
-      >
-        <line
-          x1="8"
-          y1="5"
-          x2="8"
-          y2="19"
-        />
-        <line
-          x1="16"
-          y1="5"
-          x2="16"
-          y2="19"
-        />
-      </svg>
+      <UiIcon name="pause" />
       <span>{{ buttonLabel }}</span>
-      <svg
-        width="9"
-        height="9"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <polyline points="6 9 12 15 18 9" />
-      </svg>
+      <UiIcon
+        name="chevron-down"
+        :size="9"
+        :stroke-width="2.5"
+      />
     </button>
 
     <template v-if="isMenuOpen">

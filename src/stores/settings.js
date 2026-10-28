@@ -44,11 +44,18 @@ export const useSettingsStore = defineStore("settings", () => {
   return { settings, saveError, load, update, pause, resume, dismissSaveError };
 });
 
-/** A writable computed over one setting, for use with v-model. */
-export function useSettingModel(readSetting, writeSetting) {
+/** A writable computed over the setting at `path` (e.g. "idlePause.minutes"), for use with v-model. */
+export function useSettingModel(path) {
   const store = useSettingsStore();
+  const keys = path.split(".");
+  const lastKey = keys.pop();
+  const findParent = (settings) => keys.reduce((parent, key) => parent[key], settings);
+
   return computed({
-    get: () => readSetting(store.settings),
-    set: (value) => store.update((settings) => writeSetting(settings, value)),
+    get: () => findParent(store.settings)[lastKey],
+    set: (value) =>
+      store.update((settings) => {
+        findParent(settings)[lastKey] = value;
+      }),
   });
 }
