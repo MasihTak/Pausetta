@@ -1,9 +1,22 @@
+use serde::Serialize;
+use serde_json::json;
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
+use crate::window_script::{initialization_script, options_global};
+
 pub const SETTINGS_WINDOW_LABEL: &str = "settings";
+// The frontend listens for this by name in src/App.vue; change both together.
 const SHOW_SCREEN_EVENT: &str = "show-screen";
+
+/// What the window shows. Serialized in lowercase, which is what `App.vue` compares against.
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Screen {
+    Settings,
+    About,
+}
 
 const WINDOW_WIDTH: f64 = 460.0;
 const WINDOW_HEIGHT: f64 = 760.0;
@@ -12,11 +25,11 @@ const MIN_WINDOW_HEIGHT: f64 = 360.0;
 const TITLE_BAR_ALLOWANCE: f64 = 40.0;
 
 pub fn show(app: &AppHandle) -> tauri::Result<()> {
-    show_screen(app, "settings")
+    show_screen(app, Screen::Settings)
 }
 
 pub fn show_about(app: &AppHandle) -> tauri::Result<()> {
-    show_screen(app, "about")
+    show_screen(app, Screen::About)
 }
 
 /// Opens the window on a given screen, creating it on first use.
@@ -24,7 +37,7 @@ pub fn show_about(app: &AppHandle) -> tauri::Result<()> {
 /// An existing window is told which screen to show with an event; a brand new one is told
 /// with an injected global, because the webview has no listener registered yet when it is
 /// created. That mirrors how `reminder_window` hands the toast its category.
-fn show_screen(app: &AppHandle, screen: &str) -> tauri::Result<()> {
+fn show_screen(app: &AppHandle, screen: Screen) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
         window.show()?;
         window.unminimize()?;
@@ -32,7 +45,8 @@ fn show_screen(app: &AppHandle, screen: &str) -> tauri::Result<()> {
         return app.emit_to(SETTINGS_WINDOW_LABEL, SHOW_SCREEN_EVENT, screen);
     }
 
-    let initialization_script = format!("window.__PAUSETTA_SCREEN__ = \"{screen}\";");
+    let initialization_script =
+        initialization_script(&[("__PAUSETTA_SCREEN__", json!(screen)), options_global()]);
     let window = WebviewWindowBuilder::new(
         app,
         SETTINGS_WINDOW_LABEL,
@@ -69,4 +83,15 @@ fn fitted_height(app: &AppHandle) -> tauri::Result<f64> {
     Ok(WINDOW_HEIGHT
         .min(work_area.height - TITLE_BAR_ALLOWANCE)
         .max(MIN_WINDOW_HEIGHT))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn screens_serialize_to_the_names_the_frontend_compares_against() {
+        assert_eq!(json!(Screen::Settings), json!("settings"));
+        assert_eq!(json!(Screen::About), json!("about"));
+    }
 }

@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import AppMark from "./AppMark.vue";
 import CategoryIcon from "./CategoryIcon.vue";
-import { CATEGORY_BY_KEY } from "../constants/categories.js";
+import { CATEGORY_BY_KEY, SNOOZE_MINUTES } from "../constants/categories.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 const store = useSettingsStore();
@@ -223,7 +223,7 @@ function snooze() {
                 class="toast__ghost"
                 @click="snooze"
               >
-                Snooze 10 min
+                Snooze {{ SNOOZE_MINUTES }} min
               </button>
             </div>
           </div>

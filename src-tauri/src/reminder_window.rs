@@ -4,12 +4,14 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use serde::Deserialize;
+use serde_json::json;
 use tauri::{
     AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
 
 use crate::settings::model::CategoryKey;
+use crate::window_script::{initialization_script, options_global};
 
 const REMINDER_WINDOW_LABEL_PREFIX: &str = "reminder-";
 // Larger than the 352px toast card so its glow and shadow fit inside the transparent window.
@@ -176,11 +178,11 @@ fn build_window(
     } else {
         "bottom"
     };
-    let initialization_script = format!(
-        "window.__PAUSETTA_REMINDER_CATEGORY__ = \"{}\"; window.__PAUSETTA_REMINDER_ANCHOR__ = \"{}\";",
-        category.as_str(),
-        anchor
-    );
+    let initialization_script = initialization_script(&[
+        ("__PAUSETTA_REMINDER_CATEGORY__", json!(category.as_str())),
+        ("__PAUSETTA_REMINDER_ANCHOR__", json!(anchor)),
+        options_global(),
+    ]);
 
     let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title("Pausetta reminder")

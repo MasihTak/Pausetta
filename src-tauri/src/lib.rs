@@ -6,6 +6,7 @@ mod settings;
 mod settings_window;
 mod sound;
 mod tray;
+mod window_script;
 
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
@@ -68,7 +69,6 @@ pub fn run() {
             commands::update_settings,
             commands::pause_reminders,
             commands::resume_reminders,
-            commands::show_reminder,
             commands::close_reminder,
             commands::set_toast_card_bounds,
             commands::snooze_reminder,

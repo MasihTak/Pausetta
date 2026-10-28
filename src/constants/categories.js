@@ -49,9 +49,12 @@ export const CATEGORY_BY_KEY = Object.fromEntries(
 const minuteOptions = (minutesList) =>
   minutesList.map((minutes) => ({ value: minutes, label: `${minutes} min` }));
 
-// Must match INTERVAL_OPTIONS_MINUTES / IDLE_OPTIONS_MINUTES in src-tauri/src/settings/model.rs.
-export const INTERVAL_OPTIONS = minuteOptions([15, 20, 30, 45, 60]);
-export const IDLE_OPTIONS = minuteOptions([3, 5, 10, 15, 30]);
+// Rust owns these numbers and injects them into every window it creates (window_script.rs),
+// so the frontend can't offer a value `Settings::validate` rejects.
+const { intervalMinutes, idleMinutes, snoozeMinutes } = window.__PAUSETTA_OPTIONS__;
+export const INTERVAL_OPTIONS = minuteOptions(intervalMinutes);
+export const IDLE_OPTIONS = minuteOptions(idleMinutes);
+export const SNOOZE_MINUTES = snoozeMinutes;
 
 function formatTwelveHour(hour, minute) {
   const period = hour < 12 ? "AM" : "PM";
